@@ -90,19 +90,37 @@ INSTRUCCIONES:
 Documentos adjuntos: ${parsedDocuments}
 Tipo de evento: ${eventType}`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.7-flash',
-      contents: [
-        { role: 'user', parts: [{ text: systemPrompt }, { text: userPrompt }] },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema,
-        temperature: 0.3,
-      },
-    });
+    let response;
+    let retries = 3;
+    let delay = 1000;
+    
+    while (retries > 0) {
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-3.7-flash',
+          contents: [
+            { role: 'user', parts: [{ text: systemPrompt }, { text: userPrompt }] },
+          ],
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema,
+            temperature: 0.3,
+          },
+        });
+        break; // Success
+      } catch (e: any) {
+        if (e.message?.includes('503') || e.message?.includes('UNAVAILABLE') || e.status === 503) {
+          retries--;
+          if (retries === 0) throw e;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2; // Exponential backoff
+        } else {
+          throw e; // Other errors
+        }
+      }
+    }
 
-    if (!response.text) {
+    if (!response || !response.text) {
       throw new Error('No response from Gemini');
     }
 
