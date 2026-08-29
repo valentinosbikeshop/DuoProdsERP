@@ -11,7 +11,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Edit2, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { Event } from '@/types';
@@ -101,7 +100,14 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="description">Descripción / Notas</Label>
-            <Textarea id="description" name="description" value={formData.description} onChange={handleChange} rows={3} />
+            <textarea 
+              id="description" 
+              name="description" 
+              value={formData.description} 
+              onChange={handleChange} 
+              rows={3} 
+              className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            />
           </div>
           <div className="flex justify-end pt-4">
             <Button type="button" variant="outline" onClick={() => setOpen(false)} className="mr-2">Cancelar</Button>
