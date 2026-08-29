@@ -3,10 +3,8 @@
 import { useState } from 'react';
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,17 +69,15 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="ml-4 h-8 gap-1">
-          <Edit2 className="h-3 w-3" /> Editar
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
+    <>
+      <Button variant="outline" size="sm" className="ml-4 h-8 gap-1" onClick={() => setOpen(true)}>
+        <Edit2 className="h-3 w-3" /> Editar
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogHeader>
           <DialogTitle>Editar Evento</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           <div className="space-y-2">
             <Label htmlFor="name">Nombre del Evento *</Label>
             <Input id="name" name="name" value={formData.name} onChange={handleChange} required />
@@ -117,7 +113,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
             </Button>
           </div>
         </form>
-      </DialogContent>
-    </Dialog>
+      </Dialog>
+    </>
   );
 }
