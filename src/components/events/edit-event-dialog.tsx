@@ -47,8 +47,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
       year = date.getFullYear();
     }
 
-    const { data, error } = await supabase
-      .from('events')
+    const { data, error } = await (supabase.from('events') as any)
       .update({
         ...formData,
         month,
