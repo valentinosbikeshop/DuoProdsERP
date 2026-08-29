@@ -48,6 +48,26 @@ export function LoginForm() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!email) {
+      setError('Por favor, ingresa tu correo electrónico primero para recuperar tu contraseña.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (resetError) throw resetError;
+      alert('Se han enviado las instrucciones de recuperación a tu correo (si estás en Supabase, revisa la carpeta SPAM o configura un proveedor SMTP).');
+    } catch (err: any) {
+      setError(err.message || 'Error al solicitar cambio de contraseña');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Card className="w-full shadow-lg border-slate-200">
       <CardHeader className="space-y-3 text-center">
@@ -80,6 +100,9 @@ export function LoginForm() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Contraseña</Label>
+              <Button type="button" variant="link" className="px-0 h-auto text-xs" onClick={handleResetPassword} disabled={loading}>
+                ¿Olvidaste tu contraseña?
+              </Button>
             </div>
             <Input
               id="password"
@@ -94,7 +117,7 @@ export function LoginForm() {
         </CardContent>
         <CardFooter className="flex flex-col space-y-4">
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
+            {loading ? 'Cargando...' : 'Iniciar sesión'}
           </Button>
           <div className="text-sm text-center text-slate-500">
             <Link href="/register" className="font-medium hover:text-primary transition-colors hover:underline">
