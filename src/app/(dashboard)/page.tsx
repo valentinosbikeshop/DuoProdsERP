@@ -36,6 +36,7 @@ export default function DashboardPage() {
         const { data: eventsData, error: eventsError } = await supabase
           .from('events')
           .select('status')
+          .is('deleted_at', null)
         
         if (eventsError) throw eventsError
 
@@ -52,18 +53,17 @@ export default function DashboardPage() {
         })
 
         // Fetch total revenue from completed events
-        // Note: For simplicity, joining events with event_items
         const { data: revenueData, error: revenueError } = await supabase
           .from('event_items')
-          .select('cantidad, price_at_time, events!inner(status)')
+          .select('cantidad, valor_total, events!inner(status)')
           .eq('events.status', 'completed')
+          .is('events.deleted_at', null)
 
         if (revenueError) throw revenueError
         
-        // Use price_at_time assuming total value is price * cantidad
         let revenue = 0
         revenueData?.forEach((item: any) => {
-           revenue += (item.price_at_time || 0) * (item.cantidad || 1)
+           revenue += (item.valor_total || 0) * (item.cantidad || 1)
         })
 
         // Fetch pending users

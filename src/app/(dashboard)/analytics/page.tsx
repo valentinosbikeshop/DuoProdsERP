@@ -39,7 +39,8 @@ export default function AnalyticsPage() {
           event_date,
           event_items (*)
         `)
-        .eq('status', 'completed');
+        .eq('status', 'completed')
+        .is('deleted_at', null);
         
       const events = (data as (Event & { event_items: EventItem[] })[]) || [];
 
