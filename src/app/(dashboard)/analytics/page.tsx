@@ -9,7 +9,8 @@ import { Select } from '@/components/ui/select';
 import { FinancialSummary, MonthlyData, CostCategory, Event, EventItem } from '@/types';
 import { COST_CATEGORIES } from '@/lib/constants';
 import { getMonthName } from '@/lib/utils';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Download } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function AnalyticsPage() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
@@ -27,6 +28,8 @@ export default function AnalyticsPage() {
   const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
   const [costDistribution, setCostDistribution] = useState<CostCategory[]>([]);
 
+  const [filteredEventsRaw, setFilteredEventsRaw] = useState<(Event & { event_items: EventItem[] })[]>([]);
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
@@ -36,7 +39,10 @@ export default function AnalyticsPage() {
         .from('events')
         .select(`
           id,
+          name,
+          client_company,
           event_date,
+          location,
           event_items (*)
         `)
         .eq('status', 'completed')
@@ -45,6 +51,8 @@ export default function AnalyticsPage() {
       const events = (data as (Event & { event_items: EventItem[] })[]) || [];
 
       if (error || !events.length) {
+        setSummary({ totalIngresosBrutos: 0, facturacionNeta: 0, costosOperativos: 0, utilidadNeta: 0, margenPromedio: 0, ivaDebitoFiscal: 0 });
+        setFilteredEventsRaw([]);
         setLoading(false);
         return;
       }
@@ -59,6 +67,8 @@ export default function AnalyticsPage() {
 
       const monthlyMap = new Map<string, { ventas: number; costos: number }>();
       const costMap = new Map<string, number>();
+      
+      const validEvents: typeof events = [];
 
       events.forEach(event => {
         if (!event.event_date) return;
@@ -69,6 +79,8 @@ export default function AnalyticsPage() {
         
         if (year !== selectedYear) return;
         if (selectedMonth !== '0' && monthNum.toString() !== selectedMonth) return;
+
+        validEvents.push(event);
 
         const monthKey = getMonthName(monthNum);
         
@@ -130,6 +142,7 @@ export default function AnalyticsPage() {
         })).filter(c => c.value > 0)
       );
 
+      setFilteredEventsRaw(validEvents);
       setLoading(false);
     };
 
@@ -153,6 +166,63 @@ export default function AnalyticsPage() {
     { value: '12', label: 'Diciembre' },
   ];
 
+  const handleExportExcel = async () => {
+    // Dynamic import to avoid SSR issues
+    const XLSX = await import('xlsx');
+    
+    // 1. Resumen Global Sheet
+    const wsResumen = XLSX.utils.json_to_sheet([{
+      'Período': selectedMonth === '0' ? `Año ${selectedYear}` : `${months.find(m => m.value === selectedMonth)?.label} ${selectedYear}`,
+      'Total Ingresos Brutos': summary.totalIngresosBrutos,
+      'Facturación Neta': summary.facturacionNeta,
+      'Costos Operativos': summary.costosOperativos,
+      'Utilidad Neta (Ganancia)': summary.utilidadNeta,
+      'IVA Débito Fiscal': summary.ivaDebitoFiscal,
+      'Margen Promedio (%)': summary.margenPromedio.toFixed(2),
+    }]);
+
+    // 2. Eventos Sheet
+    const eventosExport = filteredEventsRaw.map(ev => ({
+      'ID Evento': ev.id,
+      'Nombre': ev.name,
+      'Empresa': ev.client_company,
+      'Fecha': ev.event_date,
+      'Lugar': ev.location,
+      'Ítems Totales': ev.event_items.length,
+    }));
+    const wsEventos = XLSX.utils.json_to_sheet(eventosExport);
+
+    // 3. Detalle de Ítems (Costos) Sheet
+    const itemsExport: any[] = [];
+    filteredEventsRaw.forEach(ev => {
+      ev.event_items.forEach((item: any) => {
+        itemsExport.push({
+          'Evento': ev.name,
+          'Servicio': item.servicio,
+          'Detalle': item.detalle,
+          'Cantidad': item.cantidad,
+          'Costo Unit.': item.costo,
+          'Ganancia Unit.': item.ganancia,
+          'Valor Neto': item.valor_neto,
+          'IVA': item.iva,
+          'Valor Total': item.valor_total,
+          'Margen (%)': item.margen,
+          'Tipo Doc. Costo': item.tipo_doc_costo,
+          'URL Factura': item.factura_url || 'No adjunta',
+        });
+      });
+    });
+    const wsItems = XLSX.utils.json_to_sheet(itemsExport);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen Financiero');
+    XLSX.utils.book_append_sheet(wb, wsEventos, 'Eventos Completados');
+    XLSX.utils.book_append_sheet(wb, wsItems, 'Detalle de Costos');
+
+    const fileName = `Reporte_Contable_${selectedYear}_${selectedMonth === '0' ? 'Anual' : selectedMonth}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -171,6 +241,9 @@ export default function AnalyticsPage() {
             onChange={(e) => setSelectedMonth(e.target.value)} 
             options={months} 
           />
+          <Button onClick={handleExportExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white" disabled={loading || summary.totalIngresosBrutos === 0}>
+            <Download className="mr-2 h-4 w-4" /> Exportar Excel
+          </Button>
         </div>
       </div>
 
