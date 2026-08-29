@@ -76,15 +76,17 @@ export default function EventDetailPage() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch suggestions');
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al generar sugerencias (Error HTTP ' + response.status + ')');
       }
 
       const data = await response.json();
       if (data.suggestions) {
         setSuggestions((prev) => [...prev, ...data.suggestions]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating suggestions:', error);
+      alert('Error de IA: ' + error.message);
     } finally {
       setAiLoading(false);
     }

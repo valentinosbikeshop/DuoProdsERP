@@ -93,11 +93,15 @@ Tipo de evento: ${eventType}`;
     let response;
     let retries = 3;
     let delay = 1000;
+    const modelsToTry = ['gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'];
+    let currentModelIndex = 0;
     
     while (retries > 0) {
       try {
+        const targetModel = modelsToTry[currentModelIndex];
+        console.log(`Trying model: ${targetModel}`);
         response = await ai.models.generateContent({
-          model: 'gemini-3.7-flash',
+          model: targetModel,
           contents: [
             { role: 'user', parts: [{ text: systemPrompt }, { text: userPrompt }] },
           ],
@@ -111,9 +115,10 @@ Tipo de evento: ${eventType}`;
       } catch (e: any) {
         if (e.message?.includes('503') || e.message?.includes('UNAVAILABLE') || e.status === 503) {
           retries--;
-          if (retries === 0) throw e;
+          currentModelIndex = Math.min(currentModelIndex + 1, modelsToTry.length - 1);
+          if (retries === 0) throw new Error('Todos los modelos están saturados (Error 503). Por favor, intenta de nuevo más tarde.');
           await new Promise(resolve => setTimeout(resolve, delay));
-          delay *= 2; // Exponential backoff
+          delay *= 1.5; // Exponential backoff
         } else {
           throw e; // Other errors
         }
