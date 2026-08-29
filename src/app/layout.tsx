@@ -5,7 +5,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Dúo Producciones ERP',
+  title: 'DUO Producciones ERP',
   description: 'Plataforma de gestión operativa y planificación con IA',
 };
 

@@ -19,7 +19,7 @@ export function PdfGenerator({ event, items }: { event: Event; items: EventItem[
       // Header
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(22);
-      doc.text('DÚO PRODUCCIONES', 105, 20, { align: 'center' });
+      doc.text('DUO PRODUCCIONES', 105, 20, { align: 'center' });
       
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
@@ -138,7 +138,7 @@ export function PdfGenerator({ event, items }: { event: Event; items: EventItem[
       // Footer
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(8);
-      doc.text(`Documento generado por Dúo Producciones ERP - ${dateStr}`, 105, 270, { align: 'center' });
+      doc.text(`Documento generado por DUO Producciones ERP - ${dateStr}`, 105, 270, { align: 'center' });
 
       doc.save(`informe-${event.name}-${dateStr}.pdf`);
     } finally {

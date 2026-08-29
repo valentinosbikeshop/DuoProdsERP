@@ -79,7 +79,7 @@ export function EventForm() {
 
       <div className="space-y-2">
         <Label htmlFor="client_company">Empresa Cliente</Label>
-        <Input id="client_company" name="client_company" placeholder="Ej. Dúo Producciones" />
+        <Input id="client_company" name="client_company" placeholder="Ej. DUO Producciones" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

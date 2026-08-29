@@ -102,7 +102,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Bienvenido a Dúo Producciones ERP</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Bienvenido a DUO Producciones ERP</h1>
         <p className="text-muted-foreground text-lg">Panel de control y resumen operativo</p>
       </div>
 

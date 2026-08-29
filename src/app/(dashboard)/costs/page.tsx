@@ -56,7 +56,7 @@ export default function CostsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Tarifas y Servicios</h1>
           <p className="text-muted-foreground mt-2">
-            Catálogo maestro de costos de Dúo Producciones
+            Catálogo maestro de costos de DUO Producciones
           </p>
         </div>
         <Button onClick={handleAdd}>

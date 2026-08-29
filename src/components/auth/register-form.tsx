@@ -71,7 +71,7 @@ export function RegisterForm() {
     <Card className="w-full shadow-lg border-slate-200">
       <CardHeader className="space-y-3 text-center">
         <div className="flex justify-center mb-2 text-5xl">🎵</div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">Dúo Producciones</CardTitle>
+        <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">DUO Producciones</CardTitle>
         <CardDescription className="text-slate-500">
           Crea una cuenta para acceder al sistema
         </CardDescription>
@@ -85,7 +85,7 @@ export function RegisterForm() {
           )}
           {success && (
             <div className="p-3 text-sm font-medium text-green-700 bg-green-50 rounded-md border border-green-100">
-              Registro exitoso. Tu cuenta ha sido creada y ahora un administrador (Dúo Producciones) debe aprobar tu acceso en la sección Gobernanza.
+              Registro exitoso. Tu cuenta ha sido creada y ahora un administrador (DUO Producciones) debe aprobar tu acceso en la sección Gobernanza.
             </div>
           )}
           <div className="space-y-2">

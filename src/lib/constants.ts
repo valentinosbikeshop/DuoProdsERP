@@ -14,7 +14,7 @@ export const EVENT_STATUS_COLORS: Record<string, string> = {
 
 export const COST_CATEGORIES: Record<string, string> = {
   'Solista': 'Música',
-  'Dúo': 'Música',
+  'DUO': 'Música',
   'Trío': 'Música',
   'Cuarteto': 'Música',
   'Sexteto Fiamma': 'Música',

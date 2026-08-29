@@ -72,7 +72,7 @@ export function LoginForm() {
     <Card className="w-full shadow-lg border-slate-200">
       <CardHeader className="space-y-3 text-center">
         <div className="flex justify-center mb-2 text-5xl">🎵</div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">Dúo Producciones</CardTitle>
+        <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">DUO Producciones</CardTitle>
         <CardDescription className="text-slate-500">
           Ingresa tus credenciales para acceder al sistema
         </CardDescription>

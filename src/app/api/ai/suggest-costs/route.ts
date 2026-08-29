@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       required: ['suggestions', 'reasoning'],
     };
 
-    const systemPrompt = `Eres un planificador financiero experto de Dúo Producciones, una empresa de eventos y producción musical en Chile.
+    const systemPrompt = `Eres un planificador financiero experto de DUO Producciones, una empresa de eventos y producción musical en Chile.
 
 CATÁLOGO DE SERVICIOS DISPONIBLES:
 ${catalogString}

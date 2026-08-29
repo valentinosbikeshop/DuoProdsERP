@@ -106,7 +106,7 @@ CREATE POLICY "event_items_delete" ON public.event_items FOR DELETE USING (EXIST
 -- 8. Seed data for master_costs
 INSERT INTO public.master_costs (servicio, tiempo_detalle, tipo_evento, costo, valor_neto, valor_total, ganancia) VALUES
 ('Solista', '60', 'Privado', 70000, 91000, 108290, 21000),
-('Dúo', '60', 'Privado', 100000, 130000, 154700, 30000),
+('DUO', '60', 'Privado', 100000, 130000, 154700, 30000),
 ('Trío', '60', 'Privado', 150000, 195000, 232050, 45000),
 ('Cuarteto', '60', 'Privado', 200000, 260000, 309400, 60000),
 ('Sexteto Fiamma', '60', 'Privado', 691500, 898950, 1069751, 207450),

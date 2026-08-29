@@ -18,7 +18,7 @@ export function Sidebar({ isAdmin }: SidebarProps) {
       <div className="h-16 flex items-center px-6 border-b shrink-0">
         <Music className="h-6 w-6 text-primary mr-2" />
         <span className="font-semibold text-lg flex items-center gap-2">
-          Dúo Producciones
+          DUO Producciones
           <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-medium">ERP</span>
         </span>
       </div>
