@@ -10,10 +10,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 
 export default function TrashPage() {
   const supabase = createClient();
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUserEmail(user?.email || null);
+    });
     fetchTrashedEvents();
   }, [supabase]);
 
@@ -118,10 +122,12 @@ export default function TrashPage() {
                       <RefreshCcw className="h-4 w-4 mr-2" />
                       Recuperar
                     </Button>
-                    <Button onClick={() => handlePermanentDelete(event.id)} variant="destructive">
-                      <Trash className="h-4 w-4 mr-2" />
-                      Borrar Definitivamente
-                    </Button>
+                    {currentUserEmail === 'valentinosbikeshop@gmail.com' && (
+                      <Button onClick={() => handlePermanentDelete(event.id)} variant="destructive">
+                        <Trash className="h-4 w-4 mr-2" />
+                        Borrar Definitivamente
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

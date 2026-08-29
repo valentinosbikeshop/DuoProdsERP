@@ -28,8 +28,19 @@ export default function GovernancePage() {
     setLoading(false)
   }
 
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+
   useEffect(() => {
-    fetchUsers()
+    const init = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUserEmail(user?.email || null)
+      if (user?.email === 'valentinosbikeshop@gmail.com') {
+        fetchUsers()
+      } else {
+        setLoading(false)
+      }
+    }
+    init()
   }, [])
 
   const handleApprove = async (userId: string) => {
@@ -81,6 +92,12 @@ export default function GovernancePage() {
       {loading ? (
         <div className="flex justify-center items-center py-20">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : currentUserEmail !== 'valentinosbikeshop@gmail.com' ? (
+        <div className="flex flex-col justify-center items-center py-20 text-center space-y-4">
+          <Shield className="w-16 h-16 text-muted-foreground/30" />
+          <h2 className="text-xl font-bold">Acceso Restringido</h2>
+          <p className="text-muted-foreground">Solo el administrador principal puede gestionar usuarios.</p>
         </div>
       ) : (
         <PendingUsersTable

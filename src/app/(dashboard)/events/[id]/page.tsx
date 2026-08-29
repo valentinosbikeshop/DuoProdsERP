@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { FileUpload } from '@/components/events/file-upload';
 import { AiSuggestionsGrid } from '@/components/events/ai-suggestions-grid';
 import { EventItemsTable } from '@/components/events/event-items-table';
+import { EditEventDialog } from '@/components/events/edit-event-dialog';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
 import { Sparkles, FileText, CheckCircle, Loader2, Calendar, MapPin, Building2, Lock, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -170,6 +171,7 @@ export default function EventDetailPage() {
           <h2 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             {event.name}
             {isCompleted && <Lock className="h-5 w-5 text-muted-foreground" />}
+            {!isCompleted && <EditEventDialog event={event} onUpdate={setEvent} />}
           </h2>
           <div className="flex items-center gap-2 mt-2">
             <Badge className={EVENT_STATUS_COLORS[event.status as keyof typeof EVENT_STATUS_COLORS]}>
