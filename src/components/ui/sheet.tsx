@@ -1,0 +1,45 @@
+'use client';
+
+import * as React from 'react';
+import { cn } from '@/lib/utils';
+import { X } from 'lucide-react';
+
+interface SheetProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+  side?: 'left' | 'right';
+}
+
+function Sheet({ open, onOpenChange, children, side = 'left' }: SheetProps) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="fixed inset-0 bg-black/80" onClick={() => onOpenChange(false)} />
+      <div
+        className={cn(
+          'fixed inset-y-0 z-50 flex w-72 flex-col border bg-background p-6 shadow-lg transition-transform',
+          side === 'left' ? 'left-0' : 'right-0'
+        )}
+      >
+        <button
+          onClick={() => onOpenChange(false)}
+          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SheetHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return <div className={cn('flex flex-col space-y-2 mb-4', className)} {...props} />;
+}
+
+function SheetTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
+  return <h2 className={cn('text-lg font-semibold', className)} {...props} />;
+}
+
+export { Sheet, SheetHeader, SheetTitle };
