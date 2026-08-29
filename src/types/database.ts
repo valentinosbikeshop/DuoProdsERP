@@ -31,6 +31,7 @@ export type Event = {
   status: 'planning' | 'approved' | 'completed';
   created_by: string | null;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type EventItem = {

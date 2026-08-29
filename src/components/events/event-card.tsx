@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Calendar, MapPin, Building2 } from 'lucide-react';
+import { Calendar, MapPin, Building2, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Event } from '@/types';
@@ -8,9 +8,10 @@ import { cn } from '@/lib/utils';
 
 interface EventCardProps {
   event: Event;
+  onDelete?: (id: string, e: React.MouseEvent) => void;
 }
 
-export function EventCard({ event }: EventCardProps) {
+export function EventCard({ event, onDelete }: EventCardProps) {
   const statusColor = EVENT_STATUS_COLORS[event.status] || 'bg-gray-100 text-gray-800';
   const statusLabel = EVENT_STATUS_LABELS[event.status] || event.status;
 
@@ -28,13 +29,22 @@ export function EventCard({ event }: EventCardProps) {
       <Card className="hover:shadow-md transition-shadow cursor-pointer h-full animate-in fade-in duration-300 flex flex-col">
         <CardHeader>
           <div className="flex justify-between items-start gap-4">
-            <div>
+            <div className="flex-1">
               <CardTitle className="text-xl font-bold line-clamp-2">{event.name}</CardTitle>
               <CardDescription className="flex items-center gap-1 mt-2 text-sm">
                 <Building2 className="w-4 h-4" />
                 {event.client_company || 'Sin empresa'}
               </CardDescription>
             </div>
+            {event.status === 'planning' && onDelete && (
+              <button 
+                onClick={(e) => onDelete(event.id, e)}
+                className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                title="Mover a papelera"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="mt-auto flex flex-col gap-3">

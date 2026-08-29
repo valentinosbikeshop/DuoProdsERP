@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { EventCard } from '@/components/events/event-card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ export default function EventsPage() {
       const { data, error } = await supabase
         .from('events')
         .select('*')
+        .is('deleted_at', null)
         .order('event_date', { ascending: true });
       
       if (!error && data) {
@@ -33,6 +34,34 @@ export default function EventsPage() {
     
     fetchEvents();
   }, [supabase]);
+
+  const handleDeleteToTrash = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Doble confirmación explícita
+    const firstConfirm = window.confirm("¿Estás seguro de que deseas mover este evento a la papelera?");
+    if (!firstConfirm) return;
+    
+    const doubleConfirm = window.prompt('Para confirmar, escribe la palabra "ELIMINAR"');
+    if (doubleConfirm !== 'ELIMINAR') {
+      if (doubleConfirm !== null) alert('Cancelado. No se escribió "ELIMINAR" correctamente.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('events')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) throw error;
+      setEvents(events.filter(ev => ev.id !== id));
+    } catch (err) {
+      console.error('Error al enviar a papelera:', err);
+      alert('Hubo un error al mover el evento a la papelera.');
+    }
+  };
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch = 
@@ -51,12 +80,18 @@ export default function EventsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Eventos</h1>
           <p className="text-muted-foreground mt-1">Gestión de eventos y planificación con IA</p>
         </div>
-        <Link href="/events/new">
-          <Button>
-            <Plus className="mr-2 h-4 w-4" /> Nuevo Evento
-          </Button>
-        </Link>
-      </div>
+        <div className="flex gap-2">
+          <Link href="/events/trash">
+            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50">
+              <Trash2 className="mr-2 h-4 w-4" /> Papelera
+            </Button>
+          </Link>
+          <Link href="/events/new">
+            <Button>
+              <Plus className="mr-2 h-4 w-4" /> Nuevo Evento
+            </Button>
+          </Link>
+        </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
@@ -87,7 +122,7 @@ export default function EventsPage() {
       ) : filteredEvents.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
+            <EventCard key={event.id} event={event} onDelete={handleDeleteToTrash} />
           ))}
         </div>
       ) : (
