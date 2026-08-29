@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Select } from '@/components/ui/select'
 import { MasterCost } from '@/types'
 import { createClient } from '@/lib/supabase/client'
-import { formatCLP } from '@/lib/utils'
+import { formatCLP, calculateGananciaFromTotal } from '@/lib/utils'
 
 interface CostFormDialogProps {
   open: boolean
@@ -41,6 +41,12 @@ export function CostFormDialog({
   
   const valorNeto = (Number(costo) || 0) + (Number(ganancia) || 0)
   const valorTotal = Math.round(valorNeto + valorNeto * 0.19)
+
+  const handleValorTotalChange = (val: string) => {
+    const total = Number(val) || 0;
+    const { ganancia: newGanancia } = calculateGananciaFromTotal(Number(costo) || 0, total);
+    setGanancia(newGanancia);
+  };
 
   useEffect(() => {
     if (editingCost) {
@@ -177,9 +183,9 @@ export function CostFormDialog({
               <Label htmlFor="valor_total">Valor Total</Label>
               <Input
                 id="valor_total"
-                value={formatCLP(valorTotal)}
-                readOnly
-                className="bg-muted"
+                type="number"
+                value={valorTotal}
+                onChange={(e) => handleValorTotalChange(e.target.value)}
               />
             </div>
           </div>

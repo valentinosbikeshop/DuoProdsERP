@@ -26,6 +26,14 @@ export function calculateFinancials(costo: number, ganancia: number) {
   return { valorNeto, iva, valorTotal, margen: Math.round(margen * 10) / 10 };
 }
 
+export function calculateGananciaFromTotal(costo: number, valorTotal: number) {
+  const valorNeto = Math.round(valorTotal / 1.19);
+  const ganancia = valorNeto - costo;
+  const iva = valorTotal - valorNeto;
+  const margen = costo > 0 ? (ganancia / costo) * 100 : 0;
+  return { ganancia, valorNeto, iva, margen: Math.round(margen * 10) / 10 };
+}
+
 export function getMonthName(month: number): string {
   const months = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',

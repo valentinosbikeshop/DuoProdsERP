@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { AiSuggestion } from '@/types';
-import { formatCLP, formatPercentage, calculateFinancials } from '@/lib/utils';
+import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFromTotal } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,18 +68,21 @@ export function AiSuggestionsGrid({
     if (!targetItem) return;
 
     let newValue = value;
-    if (['costo', 'ganancia', 'cantidad'].includes(field as string)) {
+    if (['costo', 'ganancia', 'cantidad', 'valor_total'].includes(field as string)) {
       newValue = parseFloat(value) || 0;
     }
 
     const updatedItem = { ...targetItem, [field]: newValue };
     
-    // Si marcamos sin_ganancia, forzamos ganancia a 0
     if (field === 'sin_ganancia' && newValue === true) {
       updatedItem.ganancia = 0;
     }
 
-    if (['costo', 'ganancia', 'sin_ganancia'].includes(field as string)) {
+    // Logic to recalculate
+    if (field === 'valor_total') {
+      const financials = calculateGananciaFromTotal(updatedItem.costo, updatedItem.valor_total);
+      Object.assign(updatedItem, financials);
+    } else if (['costo', 'ganancia', 'sin_ganancia'].includes(field as string)) {
       const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia);
       Object.assign(updatedItem, financials);
     }
@@ -225,7 +228,15 @@ export function AiSuggestionsGrid({
             </TableCell>
             <TableCell className="p-2 align-top">{formatCLP(manualItem.valor_neto)}</TableCell>
             <TableCell className="p-2 align-top">{formatCLP(manualItem.iva)}</TableCell>
-            <TableCell className="p-2 align-top font-semibold text-primary">{formatCLP(manualItem.valor_total)}</TableCell>
+            <TableCell className="p-2 align-top font-semibold text-primary">
+              <Input
+                type="number"
+                value={manualItem.valor_total || ''}
+                onChange={(e) => handleInputChange('manual', 'valor_total', e.target.value)}
+                className="h-8 text-sm w-full px-2"
+                disabled={manualItem.sin_ganancia}
+              />
+            </TableCell>
             <TableCell className="p-2 align-top">{formatPercentage(manualItem.margen)}</TableCell>
             <TableCell className="p-2 align-top text-right font-bold text-primary">{formatCLP(manualItem.valor_total * manualItem.cantidad)}</TableCell>
             <TableCell className="p-2 align-top text-center">
@@ -304,7 +315,15 @@ export function AiSuggestionsGrid({
               </TableCell>
               <TableCell className="p-2 align-top">{formatCLP(item.valor_neto)}</TableCell>
               <TableCell className="p-2 align-top">{formatCLP(item.iva)}</TableCell>
-              <TableCell className="p-2 align-top font-semibold">{formatCLP(item.valor_total)}</TableCell>
+              <TableCell className="p-2 align-top font-semibold">
+                <Input
+                  type="number"
+                  value={item.valor_total || ''}
+                  onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
+                  className="h-8 text-sm w-full px-2"
+                  disabled={item.sin_ganancia}
+                />
+              </TableCell>
               <TableCell className="p-2 align-top">{formatPercentage(item.margen)}</TableCell>
               <TableCell className="p-2 align-top text-right font-semibold text-primary">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
               <TableCell className="p-2 align-top text-center">
