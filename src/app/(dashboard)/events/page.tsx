@@ -50,8 +50,7 @@ export default function EventsPage() {
     }
 
     try {
-      const { error } = await supabase
-        .from('events')
+      const { error } = await (supabase.from('events') as any)
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', id);
 
