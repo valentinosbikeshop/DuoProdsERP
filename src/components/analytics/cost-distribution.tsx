@@ -32,8 +32,8 @@ export function CostDistribution({ data }: { data: CostCategory[] }) {
                 ))}
               </Pie>
               <Tooltip 
-                formatter={(value: number, name: string, props: any) => [
-                  `${formatCLP(value)} (${formatPercentage(props.payload.percentage)})`,
+                formatter={(value: any, name: any, props: any) => [
+                  `${formatCLP(value || 0)} (${formatPercentage(props.payload.percentage)})`,
                   name
                 ]}
                 contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}

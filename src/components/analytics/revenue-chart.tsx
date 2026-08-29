@@ -30,7 +30,7 @@ export function RevenueChart({ data }: { data: MonthlyData[] }) {
                 className="text-xs text-muted-foreground"
               />
               <Tooltip 
-                formatter={(value: number) => [formatCLP(value), undefined]}
+                formatter={(value: any) => [formatCLP(value || 0), undefined]}
                 contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))' }}
               />
               <Legend />
