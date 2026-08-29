@@ -55,6 +55,11 @@ export function RegisterForm() {
       }
 
       setSuccess(true);
+      
+      setTimeout(() => {
+        router.push('/');
+        router.refresh();
+      }, 3000);
     } catch (err: any) {
       setError(err.message || 'Error al registrarse');
     } finally {
@@ -80,7 +85,7 @@ export function RegisterForm() {
           )}
           {success && (
             <div className="p-3 text-sm font-medium text-green-700 bg-green-50 rounded-md border border-green-100">
-              Registro exitoso. Revisa tu correo para confirmar tu cuenta. Una vez confirmado, un administrador deberá aprobar tu acceso.
+              Registro exitoso. Tu cuenta ha sido creada y ahora un administrador (Dúo Producciones) debe aprobar tu acceso en la sección Gobernanza.
             </div>
           )}
           <div className="space-y-2">
