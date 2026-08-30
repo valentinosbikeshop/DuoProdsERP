@@ -12,19 +12,47 @@ interface SheetProps {
 }
 
 function Sheet({ open, onOpenChange, children, side = 'left' }: SheetProps) {
+  React.useEffect(() => {
+    if (open) {
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' || e.key === 'Esc') {
+          e.preventDefault();
+          e.stopPropagation();
+          onOpenChange(false);
+        }
+      };
+      window.addEventListener('keydown', handleKeyDown, true);
+      
+      return () => {
+        document.body.style.overflow = originalStyle;
+        window.removeEventListener('keydown', handleKeyDown, true);
+      };
+    }
+  }, [open, onOpenChange]);
+
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50">
-      <div className="fixed inset-0 bg-black/80" onClick={() => onOpenChange(false)} />
+      <div 
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity" 
+        onClick={() => onOpenChange(false)} 
+        aria-hidden="true"
+      />
       <div
         className={cn(
-          'fixed inset-y-0 z-50 flex w-72 flex-col border bg-background p-6 shadow-lg transition-transform',
+          'fixed inset-y-0 z-50 flex w-72 flex-col border bg-background p-6 shadow-2xl transition-transform custom-scrollbar overflow-y-auto',
           side === 'left' ? 'left-0' : 'right-0'
         )}
       >
         <button
+          type="button"
           onClick={() => onOpenChange(false)}
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100"
+          className="absolute right-4 top-4 z-30 flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground/80 transition-all hover:bg-muted hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          aria-label="Cerrar panel (Esc)"
+          title="Cerrar (Esc)"
         >
           <X className="h-4 w-4" />
         </button>

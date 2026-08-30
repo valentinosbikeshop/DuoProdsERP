@@ -35,7 +35,8 @@ export function useUser() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
+
 
   return { profile, authUser, loading, isAdmin: profile?.role === 'admin' };
 }

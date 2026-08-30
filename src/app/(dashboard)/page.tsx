@@ -89,7 +89,8 @@ export default function DashboardPage() {
     }
 
     fetchData()
-  }, [])
+  }, [supabase])
+
 
   if (loading) {
     return (

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Profile } from '@/types'
 import { PendingUsersTable } from '@/components/governance/pending-users-table'
@@ -10,9 +10,10 @@ import { Badge } from '@/components/ui/badge'
 export default function GovernancePage() {
   const [users, setUsers] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
   const supabase = createClient()
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
@@ -26,9 +27,7 @@ export default function GovernancePage() {
       setUsers(data || [])
     }
     setLoading(false)
-  }
-
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+  }, [supabase])
 
   useEffect(() => {
     const init = async () => {
@@ -41,7 +40,8 @@ export default function GovernancePage() {
       }
     }
     init()
-  }, [])
+  }, [supabase, fetchUsers])
+
 
   const handleApprove = async (userId: string) => {
     const { error } = await (supabase.from('profiles') as any)

@@ -107,22 +107,24 @@ export function CostFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogHeader>
-        <DialogTitle>
-          {editingCost ? 'Editar Servicio' : 'Nuevo Servicio'}
-        </DialogTitle>
-        <DialogDescription>
-          Complete los detalles del servicio a continuación.
-        </DialogDescription>
-      </DialogHeader>
-      <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-        <div className="grid gap-4 py-4">
+      <form onSubmit={handleSubmit} className="flex flex-col flex-1 max-h-[inherit] overflow-hidden">
+        <DialogHeader>
+          <DialogTitle>
+            {editingCost ? 'Editar Servicio' : 'Nuevo Servicio'}
+          </DialogTitle>
+          <DialogDescription>
+            Complete los detalles del servicio a continuación.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
           <div className="grid gap-2">
             <Label htmlFor="servicio">Servicio</Label>
             <Input
               id="servicio"
               value={servicio}
               onChange={(e) => setServicio(e.target.value)}
+              placeholder="Ej. DJ / Sonido"
               required
             />
           </div>
@@ -132,6 +134,7 @@ export function CostFormDialog({
               id="tiempo"
               value={tiempoDetalle}
               onChange={(e) => setTiempoDetalle(e.target.value)}
+              placeholder="Ej. 5 horas"
             />
           </div>
           <div className="grid gap-2">
@@ -190,6 +193,7 @@ export function CostFormDialog({
             </div>
           </div>
         </div>
+
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar

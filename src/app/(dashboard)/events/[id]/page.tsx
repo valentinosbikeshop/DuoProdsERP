@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter, useParams } from 'next/navigation';
 import { Event, EventItem, AiSuggestion } from '@/types';
@@ -13,7 +13,20 @@ import { AiSuggestionsGrid } from '@/components/events/ai-suggestions-grid';
 import { EventItemsTable } from '@/components/events/event-items-table';
 import { EditEventDialog } from '@/components/events/edit-event-dialog';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
-import { Sparkles, FileText, CheckCircle, Loader2, Calendar, MapPin, Building2, Lock, ArrowLeft } from 'lucide-react';
+import { 
+  Sparkles, 
+  FileText, 
+  CheckCircle, 
+  Loader2, 
+  Calendar, 
+  MapPin, 
+  Building2, 
+  Lock, 
+  ArrowLeft,
+  Wand2,
+  FileSpreadsheet,
+  ClipboardList
+} from 'lucide-react';
 import Link from 'next/link';
 
 export default function EventDetailPage() {
@@ -26,11 +39,13 @@ export default function EventDetailPage() {
   const [items, setItems] = useState<EventItem[]>([]);
   const [suggestions, setSuggestions] = useState<AiSuggestion[]>([]);
   const [parsedText, setParsedText] = useState<string>('');
+  const [customPrompt, setCustomPrompt] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
+  const [customAiLoading, setCustomAiLoading] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
 
-  const fetchEventData = async () => {
+  const fetchEventData = useCallback(async () => {
     setLoading(true);
     try {
       const { data: eventData, error: eventError } = await supabase
@@ -55,12 +70,14 @@ export default function EventDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, supabase]);
 
   useEffect(() => {
     fetchEventData();
-  }, [id]);
+  }, [fetchEventData]);
 
+
+  // Generate suggestions based on general event description and attached documents
   const handleGenerateSuggestions = async () => {
     if (!event) return;
     setAiLoading(true);
@@ -71,7 +88,7 @@ export default function EventDetailPage() {
         body: JSON.stringify({
           eventDescription: event.description,
           parsedDocuments: parsedText,
-          eventType: event.status, // Assuming you might have an eventType field, passing status for now or add if available
+          eventType: event.status,
         }),
       });
 
@@ -81,7 +98,7 @@ export default function EventDetailPage() {
       }
 
       const data = await response.json();
-      if (data.suggestions) {
+      if (data.suggestions && data.suggestions.length > 0) {
         setSuggestions((prev) => [...prev, ...data.suggestions]);
       }
     } catch (error: any) {
@@ -89,6 +106,39 @@ export default function EventDetailPage() {
       alert('Error de IA: ' + error.message);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  // Generate breakdown from custom free-text prompt
+  const handleGenerateCustomBreakdown = async () => {
+    if (!customPrompt.trim()) return;
+    setCustomAiLoading(true);
+    try {
+      const response = await fetch('/api/ai/suggest-costs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customPrompt: customPrompt.trim(),
+          eventDescription: event?.description || '',
+          eventType: event?.status || '',
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Error al generar desglose con IA (Error HTTP ' + response.status + ')');
+      }
+
+      const data = await response.json();
+      if (data.suggestions && data.suggestions.length > 0) {
+        setSuggestions((prev) => [...prev, ...data.suggestions]);
+        setCustomPrompt(''); // Clear prompt after adding to draft
+      }
+    } catch (error: any) {
+      console.error('Error generating custom breakdown:', error);
+      alert('Error de IA: ' + error.message);
+    } finally {
+      setCustomAiLoading(false);
     }
   };
 
@@ -210,12 +260,22 @@ export default function EventDetailPage() {
       </div>
 
       <Tabs defaultValue="info" className="space-y-4 mt-6">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
           <TabsTrigger value="info">Información</TabsTrigger>
-          <TabsTrigger value="ai-suggestions">Sugerencias IA</TabsTrigger>
-          <TabsTrigger value="items">Ítems Aprobados</TabsTrigger>
+          <TabsTrigger value="draft" className="flex items-center gap-1.5">
+            Borrador de Costos
+          </TabsTrigger>
+          <TabsTrigger value="items" className="flex items-center gap-1.5">
+            Ítems Aprobados
+            {items.length > 0 && (
+              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] h-4 ml-1">
+                {items.length}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
+        {/* Tab 1: Información */}
         <TabsContent value="info" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
@@ -275,41 +335,108 @@ export default function EventDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="ai-suggestions" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                Sugerencias de IA
-              </CardTitle>
-              <CardDescription>
-                Genera sugerencias de costos y servicios basados en la descripción del evento y los documentos adjuntos.
-              </CardDescription>
+        {/* Tab 2: Borrador de Costos (antes Sugerencias IA) */}
+        <TabsContent value="draft" className="space-y-6">
+          {/* Card de Generación con IA */}
+          <Card className="glass-card border-primary/25 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+                  <Wand2 className="h-4 w-4" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold">Generadores Inteligentes de Costos</CardTitle>
+                  <CardDescription className="text-xs">
+                    Calcula y desglosa automáticamente insumos, gastronomía, personal y servicios mediante Inteligencia Artificial.
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex justify-start">
-                <Button 
-                  onClick={handleGenerateSuggestions} 
-                  disabled={aiLoading || isCompleted}
-                  className="gap-2"
-                >
-                  {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {aiLoading ? 'Generando...' : (suggestions.length > 0 ? 'Generar Más Sugerencias con IA' : 'Generar Sugerencias con IA')}
-                </Button>
-              </div>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+                {/* Generador 1: Desglose de Requerimiento Específico (Prompt Libre) */}
+                <div className="lg:col-span-2 p-4 sm:p-5 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md flex flex-col justify-between space-y-3 shadow-xs hover:border-primary/40 transition-all">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" />
+                      <span>Desglose Específico con IA (Requerimiento Puntual)</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Escribe un pedido o menú para que la IA calcule automáticamente los ingredientes, insumos, cantidades y costos:
+                    </p>
+                    <textarea
+                      rows={2}
+                      value={customPrompt}
+                      onChange={(e) => setCustomPrompt(e.target.value)}
+                      placeholder="Ej: 50 empanadas de pino sin aceituna, 30 empanadas napolitanas, 20 litros de chicha y 2 parrilleros por 5 horas..."
+                      className="w-full rounded-xl border border-input/80 bg-background/80 px-3.5 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 custom-scrollbar resize-none font-normal shadow-2xs"
+                      disabled={customAiLoading || isCompleted}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey && customPrompt.trim()) {
+                          e.preventDefault();
+                          handleGenerateCustomBreakdown();
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
+                    <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                      Tip: Presiona Enter para enviar
+                    </span>
+                    <Button 
+                      onClick={handleGenerateCustomBreakdown} 
+                      disabled={customAiLoading || !customPrompt.trim() || isCompleted}
+                      size="sm"
+                      className="gap-1.5 ml-auto shadow-xs font-medium rounded-xl"
+                    >
+                      {customAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                      {customAiLoading ? 'Desglosando con IA...' : 'Desglosar y Añadir al Borrador'}
+                    </Button>
+                  </div>
+                </div>
 
-              <div className="mt-6">
-                <h3 className="text-lg font-medium mb-4">Sugerencias Generadas / Manuales</h3>
-                <AiSuggestionsGrid 
-                  suggestions={suggestions} 
-                  eventId={id} 
-                  onItemApproved={fetchEventData} 
-                />
+                {/* Generador 2: Sugerencias Generales del Evento y Documentos */}
+                <div className="p-4 sm:p-5 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md flex flex-col justify-between space-y-3 shadow-xs hover:border-primary/40 transition-all">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                      <FileSpreadsheet className="h-3.5 w-3.5 text-primary" />
+                      <span>Sugerir según Ficha y Adjuntos</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Analiza la descripción del evento y los documentos técnicos/cotizaciones subidos para sugerir el montaje global.
+                    </p>
+                  </div>
+                  <div className="pt-2 border-t border-border/40">
+                    <Button 
+                      variant="outline"
+                      onClick={handleGenerateSuggestions} 
+                      disabled={aiLoading || isCompleted}
+                      size="sm"
+                      className="w-full gap-1.5 text-xs border-primary/30 hover:bg-primary/10 font-medium rounded-xl"
+                    >
+                      {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5 text-primary" />}
+                      {aiLoading ? 'Generando...' : 'Generar Sugerencias Generales'}
+                    </Button>
+                  </div>
+                </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Grilla / Tabla de Borrador */}
+          <Card className="shadow-xs glass-card border-border/70">
+            <CardContent className="p-4 sm:p-6">
+              <AiSuggestionsGrid 
+                suggestions={suggestions} 
+                eventId={id} 
+                onItemApproved={fetchEventData} 
+              />
             </CardContent>
           </Card>
         </TabsContent>
 
+
+        {/* Tab 3: Ítems Aprobados */}
         <TabsContent value="items" className="space-y-4">
           <Card>
             <CardHeader>
@@ -331,3 +458,4 @@ export default function EventDetailPage() {
     </div>
   );
 }
+

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Trash, RefreshCcw, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -14,14 +14,7 @@ export default function TrashPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setCurrentUserEmail(user?.email || null);
-    });
-    fetchTrashedEvents();
-  }, [supabase]);
-
-  async function fetchTrashedEvents() {
+  const fetchTrashedEvents = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('events')
@@ -33,7 +26,15 @@ export default function TrashPage() {
       setEvents(data as Event[]);
     }
     setLoading(false);
-  }
+  }, [supabase]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setCurrentUserEmail(user?.email || null);
+    });
+    fetchTrashedEvents();
+  }, [supabase, fetchTrashedEvents]);
+
 
   const handleRestore = async (id: string) => {
     const confirm = window.confirm("¿Estás seguro de que deseas recuperar este evento? Volverá a la sección principal de Eventos.");

@@ -30,8 +30,9 @@ export function Header({ onToggleSidebar }: HeaderProps) {
   };
 
   return (
-    <header className="h-16 border-b bg-card sticky top-0 z-40 flex items-center justify-between px-6">
+    <header className="h-16 border-b border-border/60 bg-card/80 backdrop-blur-xl sticky top-0 z-40 flex items-center justify-between px-6 shadow-2xs">
       <div className="flex items-center lg:hidden">
+
         <Button variant="ghost" size="icon" onClick={onToggleSidebar}>
           <Menu className="h-5 w-5" />
           <span className="sr-only">Menú</span>

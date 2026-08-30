@@ -7,7 +7,12 @@ import { createClient } from '@supabase/supabase-js';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { eventDescription, parsedDocuments = '', eventType = '' } = body;
+    const { 
+      eventDescription = '', 
+      parsedDocuments = '', 
+      eventType = '',
+      customPrompt = '' 
+    } = body;
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -40,9 +45,9 @@ export async function POST(req: NextRequest) {
           items: {
             type: Type.OBJECT,
             properties: {
-              servicio: { type: Type.STRING, description: 'Nombre del servicio' },
-              detalle: { type: Type.STRING, description: 'Detalle o tiempo del servicio' },
-              tipo_evento: { type: Type.STRING, description: 'Tipo de evento' },
+              servicio: { type: Type.STRING, description: 'Nombre claro del servicio o insumo' },
+              detalle: { type: Type.STRING, description: 'Detalle cuantitativo o especificación técnica' },
+              tipo_evento: { type: Type.STRING, description: 'Categoría o tipo (Gastronomía, Logística, Técnica, etc.)' },
               cantidad: { type: Type.INTEGER, description: 'Cantidad sugerida' },
               costo: { type: Type.NUMBER, description: 'Costo base unitario en CLP' },
               ganancia: { type: Type.NUMBER, description: 'Ganancia por unidad en CLP' },
@@ -65,30 +70,59 @@ export async function POST(req: NextRequest) {
             ],
           },
         },
-        reasoning: { type: Type.STRING, description: 'Explicación breve del razonamiento' },
+        reasoning: { type: Type.STRING, description: 'Explicación breve del razonamiento y desglose realizado' },
       },
       required: ['suggestions', 'reasoning'],
     };
 
-    const systemPrompt = `Eres un planificador financiero experto de DUO Producciones, una empresa de eventos y producción musical en Chile.
+    let systemPrompt = `Eres un planificador financiero y cotizador experto de DUO Producciones, una prestigiosa empresa de producción de eventos y gastronomía en Chile.
 
-CATÁLOGO DE SERVICIOS DISPONIBLES:
+CATÁLOGO DE SERVICIOS Y COSTOS REFERENCIALES:
 ${catalogString}
 
-INSTRUCCIONES:
-1. Analiza la descripción del evento y los documentos adjuntos proporcionados.
+REGLAS FINANCIERAS Y DE MERCADO CHILENO:
+1. Moneda: Pesos Chilenos (CLP). Usa precios de mercado realistas y actualizados en Chile (ej. kilo de posta/posta negra $8.000-$10.000, docena de masas $2.500-$3.500, kilo de queso $7.000-$9.000, etc.).
+2. Fórmulas:
+   - valor_neto = costo + ganancia
+   - iva = Math.round(valor_neto * 0.19)
+   - valor_total = valor_neto + iva
+   - margen = costo > 0 ? (ganancia / costo) * 100 : 0
+3. Asigna un margen de ganancia razonable para la productora (usualmente entre 25% y 40% sobre el costo unitario, o según catálogo).
+`;
+
+    let userPrompt = '';
+
+    if (customPrompt && customPrompt.trim()) {
+      systemPrompt += `
+INSTRUCCIONES DE DESGLOSE INTELIGENTE (PROMPT LIBRE / PEDIDO ESPECÍFICO):
+El usuario ha solicitado cotizar o desglosar un requerimiento puntual (ejemplo: "50 empanadas de pino sin aceituna, 30 empanadas napolitanas", "asado para 40 personas", "barra libre de terremotos y piscolas").
+
+DEBES REALIZAR UN DESGLOSE EXHAUSTIVO Y DETALLADO:
+1. Insumos e ingredientes principales: Divide la preparación en sus materias primas requeridas con cantidades reales (ej. Kilos de carne posta picada, cebollas y aliños, masas de empanada, queso mantecoso, jamón, tomates, etc.).
+2. Respeta estrictamente las restricciones del cliente: Si pide "sin aceituna", asegúrate de excluirla y detallarlo. Si pide un tipo específico de masa o corte, refléjalo.
+3. Insumos secundarios y operativos: Incluye gas para horneo/cocción, manteca/aceite, servilletas, bandejas o cajas de transporte, carbón (si es parrilla), etc.
+4. Mano de obra y elaboración: Sugiere el ítem de elaboración/cocinero/maestro si corresponde al volumen.
+5. Cada ítem debe tener un 'servicio' descriptivo, un 'detalle' con la cantidad técnica necesaria (ej. "5 kg aprox para 50 unidades"), 'cantidad' entera, y 'costo'/'ganancia' unitarios en CLP.`;
+
+      userPrompt = `REQUERIMIENTO ESPECÍFICO DEL USUARIO A DESGLOSAR:
+"${customPrompt.trim()}"
+
+Contexto adicional del evento:
+- Descripción general del evento: ${eventDescription || 'Sin descripción adicional'}
+- Tipo de evento: ${eventType || 'General'}`;
+    } else {
+      systemPrompt += `
+INSTRUCCIONES DE GENERACIÓN SEGÚN EVENTO Y DOCUMENTOS:
+1. Analiza la descripción general del evento y los documentos adjuntos proporcionados.
 2. Selecciona los servicios más apropiados del catálogo para este evento.
 3. Para cada servicio sugerido, usa los precios del catálogo como base.
-4. Calcula correctamente: valor_neto = costo + ganancia, iva = valor_neto * 0.19, valor_total = valor_neto + iva, margen = (ganancia / costo) * 100.
-5. Sugiere cantidades precisas (ej. kilos, litros, unidades) basándote en el número de invitados y duración del evento.
-6. Prioriza los servicios del catálogo existente para la parte artística y técnica.
-7. DESGLOSE EXHAUSTIVO (CRÍTICO): Si se mencionan comidas o bebidas (ej. terremotos, piscolas, choripanes, empanadas), DEBES desglosar obligatoriamente sus ingredientes y materiales. Por ejemplo, para 'Terremotos' genera ítems separados para: Helado de Piña, Pipeño, Granadina, Vasos desechables, Bombillas. Para 'Choripanes': Longanizas, Pan marraqueta, Carbón, Mayonesa/Pebre, Servilletas. Estima los costos reales del mercado chileno.
-8. LOGÍSTICA OCULTA: Deduce y sugiere costos operativos que el usuario no mencionó pero son obligatorios: Arriendo de sede/local, hielo, fletes/transporte, personal de aseo, bolsas de basura, seguridad, baños químicos (si es masivo), permisos municipales (si aplica).
-9. Todas estas sugerencias extra deben añadirse como ítems nuevos calculando un costo razonable, una ganancia para la productora, y su respectivo IVA y margen.`;
+4. DESGLOSE EXHAUSTIVO: Si se mencionan comidas o bebidas (ej. terremotos, piscolas, choripanes, empanadas), desglosa obligatoriamente sus ingredientes y materiales.
+5. LOGÍSTICA OCULTA: Deduce y sugiere costos operativos que el usuario no mencionó pero son obligatorios: Arriendo de sede/local, hielo, fletes/transporte, personal de aseo, bolsas de basura, seguridad, baños químicos (si es masivo), permisos municipales (si aplica).`;
 
-    const userPrompt = `Descripción del evento: ${eventDescription}
+      userPrompt = `Descripción del evento: ${eventDescription}
 Documentos adjuntos: ${parsedDocuments}
 Tipo de evento: ${eventType}`;
+    }
 
     let response;
     let retries = 3;
@@ -99,7 +133,7 @@ Tipo de evento: ${eventType}`;
     while (retries > 0) {
       try {
         const targetModel = modelsToTry[currentModelIndex];
-        console.log(`Trying model: ${targetModel}`);
+        console.log(`Calling Gemini with model: ${targetModel}`);
         response = await ai.models.generateContent({
           model: targetModel,
           contents: [
@@ -108,7 +142,7 @@ Tipo de evento: ${eventType}`;
           config: {
             responseMimeType: 'application/json',
             responseSchema,
-            temperature: 0.3,
+            temperature: 0.25,
           },
         });
         break; // Success
@@ -137,3 +171,4 @@ Tipo de evento: ${eventType}`;
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
 }
+

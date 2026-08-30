@@ -14,14 +14,15 @@ export function Sidebar({ isAdmin }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 fixed left-0 top-0 bottom-0 h-full border-r bg-card flex flex-col z-50">
-      <div className="h-16 flex items-center px-6 border-b shrink-0">
+    <aside className="w-64 fixed left-0 top-0 bottom-0 h-full border-r border-border/60 bg-card/90 backdrop-blur-xl flex flex-col z-50 shadow-xs">
+      <div className="h-16 flex items-center px-6 border-b border-border/60 shrink-0">
         <Music className="h-6 w-6 text-primary mr-2" />
         <span className="font-semibold text-lg flex items-center gap-2">
           DUO Producciones
-          <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-medium">ERP</span>
+          <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full font-medium border border-primary/20">ERP</span>
         </span>
       </div>
+
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="px-4 space-y-1">
           {navLinks.map((link) => {
