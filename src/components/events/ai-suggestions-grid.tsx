@@ -98,7 +98,7 @@ export function AiSuggestionsGrid({
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.iva;
       updatedItem.margen = financials.margen;
-    } else if (['costo', 'ganancia', 'sin_ganancia'].includes(field) || (field === 'iva_incluido')) {
+    } else if (['costo', 'ganancia', 'sin_ganancia'].includes(field)) {
       const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia);
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.iva;
@@ -116,29 +116,7 @@ export function AiSuggestionsGrid({
     }
   };
 
-  const applyIvaIncluido = (id: string) => {
-    const isManual = id === 'manual';
-    const targetItem = isManual ? manualItem : editableSuggestions.find(s => s.id === id);
-    if (!targetItem || !targetItem.costo) return;
 
-    // Si viene IVA incluido, el valor real neto es costo / 1.19
-    const newNetCosto = Math.round(targetItem.costo / 1.19);
-    
-    const updatedItem = { ...targetItem, costo: newNetCosto } as any;
-    
-    const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia);
-    updatedItem.valor_neto = financials.valorNeto;
-    updatedItem.iva = financials.iva;
-    updatedItem.valor_total = financials.valorTotal;
-    updatedItem.margen = financials.margen;
-
-    if (isManual) {
-      setManualItem(updatedItem as AiSuggestion);
-    } else {
-      setEditableSuggestions((prev) => prev.map((item) => (item.id === id ? updatedItem : item)));
-      updateSupabase(updatedItem); // Save immediately
-    }
-  };
 
   const handleBlur = (id: string) => {
     if (id === 'manual') return;
@@ -366,14 +344,6 @@ export function AiSuggestionsGrid({
                     >
                       {manualItem.tipo_doc_costo || 'factura'}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => applyIvaIncluido('manual')}
-                      className="flex-1 bg-zinc-100 text-zinc-600 border border-zinc-200 hover:bg-zinc-200 text-[9px] px-1 py-0.5 rounded font-semibold uppercase tracking-wider text-center"
-                      title="Haz clic si este costo ya tiene IVA. Desglosará el IVA automáticamente."
-                    >
-                      IVA INCL.
-                    </button>
                   </div>
                 </div>
               </TableCell>
@@ -487,14 +457,6 @@ export function AiSuggestionsGrid({
                         className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
                       >
                         {item.tipo_doc_costo || 'factura'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => applyIvaIncluido(item.id!)}
-                        className="flex-1 bg-zinc-100 text-zinc-600 border border-zinc-200 hover:bg-zinc-200 text-[9px] px-1 py-0.5 rounded font-semibold uppercase tracking-wider text-center"
-                        title="Haz clic si este costo ya tiene IVA. Desglosará el IVA automáticamente."
-                      >
-                        IVA INCL.
                       </button>
                     </div>
                   </div>
