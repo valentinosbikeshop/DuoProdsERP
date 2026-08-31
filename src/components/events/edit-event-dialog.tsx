@@ -227,7 +227,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
                 onChange={handleChange} 
                 rows={4} 
                 placeholder="Describe detalles logísticos, cronograma, requerimientos u observaciones..."
-                className="flex min-h-[95px] w-full rounded-xl border border-input bg-background/50 px-3.5 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all custom-scrollbar resize-y"
+                className="flex min-h-[95px] w-full rounded-xl border border-input bg-background/50 px-3.5 py-2.5 text-sm font-normal ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all custom-scrollbar resize-y"
               />
               <p className="text-[11px] text-muted-foreground">
                 Tip: Esta información sirve como referencia para el equipo y el informe final.

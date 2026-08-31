@@ -260,7 +260,7 @@ export default function EventDetailPage() {
       </div>
 
       <Tabs defaultValue="info" className="space-y-4 mt-6">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
+        <TabsList className="flex flex-wrap md:inline-flex w-full md:w-auto h-auto min-h-12 gap-1.5 justify-start md:justify-center p-1.5">
           <TabsTrigger value="info">Información</TabsTrigger>
           <TabsTrigger value="draft" className="flex items-center gap-1.5">
             Borrador de Costos
