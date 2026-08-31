@@ -39,5 +39,13 @@
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.6.0"
+  },
+  "allowScripts": {
+    "@google/genai": true,
+    "core-js": true,
+    "protobufjs": true,
+    "unrs-resolver": true,
+    "wnrs-resolver": true
   }
 }
+
