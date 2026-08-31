@@ -5,6 +5,7 @@ import { EventItem } from '@/types';
 import { formatCLP, formatPercentage, calculateFinancials } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine } from 'lucide-react';
 import {
   Table,
@@ -28,7 +29,31 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
+  const [localItems, setLocalItems] = useState<EventItem[]>(items);
   const supabase = createClient();
+
+  React.useEffect(() => {
+    setLocalItems(items);
+  }, [items]);
+
+  const handleQuantityChange = (id: string, newQty: string) => {
+    const qty = parseInt(newQty) || 0;
+    setLocalItems(prev => prev.map(item => item.id === id ? { ...item, cantidad: qty } : item));
+  };
+
+  const handleQuantityBlur = async (id: string) => {
+    const item = localItems.find(i => i.id === id);
+    if (!item) return;
+    try {
+      const { error } = await (supabase.from('event_items') as any)
+        .update({ cantidad: item.cantidad })
+        .eq('id', id);
+      if (error) throw error;
+      // Option to call onItemDeleted() to refresh if we want, but local state is already updated.
+    } catch (e) {
+      console.error('Error updating quantity:', e);
+    }
+  };
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
@@ -84,7 +109,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
     const name = window.prompt("Ingresa el nombre del producto consolidado (Ej: Piscolas (100 un)):");
     if (!name || !name.trim()) return;
 
-    const selectedItems = items.filter(s => selectedIds.includes(s.id!));
+    const selectedItems = localItems.filter(s => selectedIds.includes(s.id!));
     const totalCost = selectedItems.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
     const financials = calculateFinancials(totalCost, 0);
 
@@ -148,7 +173,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
     );
   };
 
-  if (!items || items.length === 0) {
+  if (!localItems || localItems.length === 0) {
     return (
       <div className="p-8 text-center border rounded-md bg-muted/20">
         <p className="text-muted-foreground">No hay ítems aprobados para este evento.</p>
@@ -156,7 +181,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
     );
   }
 
-  const topLevelItems = items.filter(item => !item.parent_id);
+  const topLevelItems = localItems.filter(item => !item.parent_id);
 
   const totals = topLevelItems.reduce(
     (acc, item) => ({
@@ -171,7 +196,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
 
   const renderRow = (item: EventItem, isChild: boolean = false) => {
     const isSelected = selectedIds.includes(item.id!);
-    const hasChildren = items.some(s => s.parent_id === item.id);
+    const hasChildren = localItems.some(s => s.parent_id === item.id);
     const isExpanded = expandedParents.includes(item.id!);
 
     return (
@@ -206,7 +231,20 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
         </TableCell>
         <TableCell className="text-muted-foreground text-sm">{item.detalle}</TableCell>
         <TableCell>{item.tipo_evento}</TableCell>
-        <TableCell>{item.cantidad}</TableCell>
+        <TableCell>
+          {isCompleted ? (
+            item.cantidad
+          ) : (
+            <Input
+              type="number"
+              value={item.cantidad || ''}
+              onChange={(e) => handleQuantityChange(item.id!, e.target.value)}
+              onBlur={() => handleQuantityBlur(item.id!)}
+              className="h-8 w-16 text-center px-1"
+              min="1"
+            />
+          )}
+        </TableCell>
         <TableCell>
           <div className="flex flex-col gap-1">
             {formatCLP(item.costo)}
@@ -302,7 +340,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
           </TableHeader>
           <TableBody>
             {topLevelItems.map((item) => {
-              const children = items.filter(s => s.parent_id === item.id);
+              const children = localItems.filter(s => s.parent_id === item.id);
               const isExpanded = expandedParents.includes(item.id!);
               
               return (
