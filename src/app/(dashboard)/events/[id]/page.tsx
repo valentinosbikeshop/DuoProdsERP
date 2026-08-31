@@ -291,14 +291,17 @@ export default function EventDetailPage() {
                 <div className="flex items-center gap-3 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium w-24">Fecha:</span>
-                  <span>{event.event_date ? new Intl.DateTimeFormat('es-CL').format(new Date(event.event_date)) : 'No especificada'}</span>
+                  <span>{event.event_date ? (() => { 
+                    const [y, m, d] = event.event_date.split('-'); 
+                    return `${d}-${m}-${y}`; 
+                  })() : 'No especificada'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium w-24">Ubicación:</span>
                   <span>{event.location || 'No especificada'}</span>
                 </div>
-                <div className="mt-4 pt-4 border-t">
+                <div className="mt-4 pt-4 border-t border-border/40">
                   <h4 className="font-medium text-sm mb-2">Descripción:</h4>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{event.description || 'Sin descripción.'}</p>
                 </div>

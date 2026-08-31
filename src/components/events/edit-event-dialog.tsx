@@ -148,7 +148,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
 
             {/* Nombre del Evento */}
             <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-xs font-semibold text-foreground flex items-center gap-1">
+              <Label htmlFor="name" className="text-xs font-medium text-foreground flex items-center gap-1">
                 Nombre del Evento <span className="text-destructive">*</span>
               </Label>
               <Input 
@@ -165,7 +165,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
             {/* 2-Column Grid: Cliente & Fecha */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="client_company" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Label htmlFor="client_company" className="text-xs font-medium text-foreground flex items-center gap-1.5">
                   <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
                   Cliente / Empresa
                 </Label>
@@ -180,7 +180,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="event_date" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Label htmlFor="event_date" className="text-xs font-medium text-foreground flex items-center gap-1.5">
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                   Fecha del Evento
                 </Label>
@@ -197,7 +197,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
 
             {/* Ubicación */}
             <div className="space-y-1.5">
-              <Label htmlFor="location" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Label htmlFor="location" className="text-xs font-medium text-foreground flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
                 Ubicación
               </Label>
@@ -214,7 +214,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
             {/* Descripción / Notas */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
-                <Label htmlFor="description" className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Label htmlFor="description" className="text-xs font-medium text-foreground flex items-center gap-1.5">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                   Descripción / Notas
                 </Label>
