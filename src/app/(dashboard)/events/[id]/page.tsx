@@ -505,7 +505,8 @@ export default function EventDetailPage() {
               <EventItemsTable 
                 items={items} 
                 onItemDeleted={fetchEventData} 
-                isCompleted={isCompleted} 
+                isCompleted={isCompleted}
+                eventId={id}
               />
             </CardContent>
           </Card>
