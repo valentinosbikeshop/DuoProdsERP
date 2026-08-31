@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Event } from '@/types';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
-import { cn } from '@/lib/utils';
+import { cn, formatDateCL } from '@/lib/utils';
 
 interface EventCardProps {
   event: Event;
@@ -16,13 +16,9 @@ export function EventCard({ event, onDelete }: EventCardProps) {
   const statusLabel = EVENT_STATUS_LABELS[event.status] || event.status;
 
   const formattedDate = event.event_date
-    ? new Intl.DateTimeFormat('es-CL', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      }).format(new Date(event.event_date))
+    ? formatDateCL(event.event_date, { long: true })
     : 'Fecha por definir';
+
 
   return (
     <Link href={`/events/${event.id}`}>

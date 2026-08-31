@@ -2,7 +2,7 @@
 
 import { jsPDF } from 'jspdf';
 import { EventItem, Event } from '@/types';
-import { formatCLP, formatPercentage } from '@/lib/utils';
+import { formatCLP, formatPercentage, formatDateCL } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { useState } from 'react';
@@ -38,7 +38,7 @@ export function PdfGenerator({ event, items }: { event: Event; items: EventItem[
       
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      const eventDate = event.event_date ? new Date(event.event_date).toLocaleDateString('es-CL') : 'N/A';
+      const eventDate = event.event_date ? formatDateCL(event.event_date) : 'N/A';
       doc.text(`Evento: ${event.name}`, 20, 60);
       doc.text(`Cliente: ${event.client_company || 'N/A'}`, 20, 66);
       doc.text(`Fecha: ${eventDate}`, 20, 72);

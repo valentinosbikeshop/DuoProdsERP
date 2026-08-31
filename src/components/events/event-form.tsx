@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { parseDateSafe } from '@/lib/utils';
 
 export function EventForm() {
   const router = useRouter();
@@ -35,9 +36,9 @@ export function EventForm() {
       let month = null;
       let year = null;
       if (event_date) {
-        const dateObj = new Date(event_date);
-        month = dateObj.getMonth() + 1;
-        year = dateObj.getFullYear();
+        const parsed = parseDateSafe(event_date);
+        month = parsed.month;
+        year = parsed.year;
       }
 
       const { error: insertError } = await supabase.from('events').insert({

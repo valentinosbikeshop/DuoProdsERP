@@ -8,7 +8,7 @@ import { CostDistribution } from '@/components/analytics/cost-distribution';
 import { Select } from '@/components/ui/select';
 import { FinancialSummary, MonthlyData, CostCategory, Event, EventItem } from '@/types';
 import { COST_CATEGORIES } from '@/lib/constants';
-import { getMonthName } from '@/lib/utils';
+import { getMonthName, parseDateSafe } from '@/lib/utils';
 import { Loader2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -73,9 +73,9 @@ export default function AnalyticsPage() {
       events.forEach(event => {
         if (!event.event_date) return;
         
-        const date = new Date(event.event_date);
-        const year = date.getFullYear().toString();
-        const monthNum = date.getMonth() + 1;
+        const parsed = parseDateSafe(event.event_date);
+        const year = parsed.year.toString();
+        const monthNum = parsed.month;
         
         if (year !== selectedYear) return;
         if (selectedMonth !== '0' && monthNum.toString() !== selectedMonth) return;

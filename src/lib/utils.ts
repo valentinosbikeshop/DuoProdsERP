@@ -41,3 +41,38 @@ export function getMonthName(month: number): string {
   ];
   return months[month - 1] || '';
 }
+
+/**
+ * Parse a YYYY-MM-DD date string safely without timezone shift.
+ * new Date('2026-09-13') interprets as UTC midnight, which in Chile (UTC-4)
+ * becomes Sept 12. This function parses the string directly.
+ */
+export function parseDateSafe(dateStr: string): { year: number; month: number; day: number } {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return { year: y, month: m, day: d };
+}
+
+/**
+ * Format a YYYY-MM-DD date string for display in Chilean locale, 
+ * without timezone drift.
+ */
+export function formatDateCL(dateStr: string, options?: { long?: boolean }): string {
+  const { year, month, day } = parseDateSafe(dateStr);
+  if (!year || !month || !day) return 'Fecha inválida';
+
+  const monthNames = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  // Create date at noon to avoid any timezone edge cases
+  const dateObj = new Date(year, month - 1, day, 12, 0, 0);
+  const weekday = dayNames[dateObj.getDay()];
+
+  if (options?.long) {
+    return `${weekday}, ${day} de ${monthNames[month - 1]} de ${year}`;
+  }
+  return `${String(day).padStart(2, '0')}-${String(month).padStart(2, '0')}-${year}`;
+}
+

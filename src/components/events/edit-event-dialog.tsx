@@ -22,6 +22,7 @@ import {
   Save 
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { parseDateSafe } from '@/lib/utils';
 import { Event } from '@/types';
 
 interface EditEventDialogProps {
@@ -73,9 +74,9 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
     let month = null;
     let year = null;
     if (formData.event_date) {
-      const date = new Date(formData.event_date);
-      month = date.getMonth() + 1;
-      year = date.getFullYear();
+      const parsed = parseDateSafe(formData.event_date);
+      month = parsed.month;
+      year = parsed.year;
     }
 
     try {

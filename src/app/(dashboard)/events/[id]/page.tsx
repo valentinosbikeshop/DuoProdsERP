@@ -13,6 +13,7 @@ import { AiSuggestionsGrid } from '@/components/events/ai-suggestions-grid';
 import { EventItemsTable } from '@/components/events/event-items-table';
 import { EditEventDialog } from '@/components/events/edit-event-dialog';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
+import { formatDateCL } from '@/lib/utils';
 import { 
   Sparkles, 
   FileText, 
@@ -291,10 +292,7 @@ export default function EventDetailPage() {
                 <div className="flex items-center gap-3 text-sm">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium w-24">Fecha:</span>
-                  <span>{event.event_date ? (() => { 
-                    const [y, m, d] = event.event_date.split('-'); 
-                    return `${d}-${m}-${y}`; 
-                  })() : 'No especificada'}</span>
+                  <span>{event.event_date ? formatDateCL(event.event_date) : 'No especificada'}</span>
                 </div>
                 <div className="flex items-center gap-3 text-sm">
                   <MapPin className="h-4 w-4 text-muted-foreground" />

@@ -3,9 +3,34 @@ export const runtime = 'nodejs';
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createClient } from '@supabase/supabase-js';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+
+// Verify the request comes from an authenticated user
+async function verifyAuth(req: NextRequest) {
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll() {},
+      },
+    }
+  );
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+}
 
 export async function POST(req: NextRequest) {
   try {
+    // Auth guard: reject unauthenticated requests
+    const user = await verifyAuth(req);
+    if (!user) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { 
       eventDescription = '', 
@@ -13,6 +38,11 @@ export async function POST(req: NextRequest) {
       eventType = '',
       customPrompt = '' 
     } = body;
+
+    // Input validation: at least one input must be provided
+    if (!eventDescription && !customPrompt && !parsedDocuments) {
+      return NextResponse.json({ error: 'Se requiere al menos una descripción, prompt o documento' }, { status: 400 });
+    }
 
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
