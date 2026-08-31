@@ -39,7 +39,7 @@ export default function EventDetailPage() {
 
   const [event, setEvent] = useState<Event | null>(null);
   const [items, setItems] = useState<EventItem[]>([]);
-  const [suggestions, setSuggestions] = useState<AiSuggestion[]>([]);
+  const [draftItems, setDraftItems] = useState<EventItem[]>([]);
   const [parsedText, setParsedText] = useState<string>('');
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -62,11 +62,13 @@ export default function EventDetailPage() {
       const { data: itemsData, error: itemsError } = await supabase
         .from('event_items')
         .select('*')
-        .eq('event_id', id)
-        .eq('approved', true);
+        .eq('event_id', id);
         
       if (itemsError) throw itemsError;
-      setItems(itemsData as EventItem[]);
+      
+      const allItems = itemsData as EventItem[];
+      setItems(allItems.filter((item) => item.approved));
+      setDraftItems(allItems.filter((item) => !item.approved));
     } catch (error) {
       console.error('Error fetching event data:', error);
     } finally {
@@ -76,7 +78,28 @@ export default function EventDetailPage() {
 
   useEffect(() => {
     fetchEventData();
-  }, [fetchEventData]);
+
+    // Subscribe to realtime changes on event_items for this event
+    const channel = supabase
+      .channel(`event_items_changes_${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_items',
+          filter: `event_id=eq.${id}`,
+        },
+        () => {
+          fetchEventData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchEventData, id, supabase]);
 
 
   // Generate suggestions based on general event description and attached documents
@@ -101,7 +124,23 @@ export default function EventDetailPage() {
 
       const data = await response.json();
       if (data.suggestions && data.suggestions.length > 0) {
-        setSuggestions((prev) => [...prev, ...data.suggestions]);
+        const newDrafts = data.suggestions.map((s: any) => ({
+          event_id: id,
+          servicio: s.servicio,
+          detalle: s.detalle,
+          tipo_evento: s.tipo_evento || 'AI',
+          cantidad: s.cantidad || 1,
+          costo: s.costo || 0,
+          ganancia: s.ganancia || 0,
+          valor_neto: s.valor_neto || 0,
+          iva: s.iva || 0,
+          valor_total: s.valor_total || 0,
+          margen: s.margen || 0,
+          tipo_doc_costo: s.tipo_doc_costo || 'factura',
+          approved: false,
+        }));
+        
+        await supabase.from('event_items').insert(newDrafts);
       }
     } catch (error: any) {
       console.error('Error generating suggestions:', error);
@@ -133,7 +172,23 @@ export default function EventDetailPage() {
 
       const data = await response.json();
       if (data.suggestions && data.suggestions.length > 0) {
-        setSuggestions((prev) => [...prev, ...data.suggestions]);
+        const newDrafts = data.suggestions.map((s: any) => ({
+          event_id: id,
+          servicio: s.servicio,
+          detalle: s.detalle,
+          tipo_evento: s.tipo_evento || 'AI',
+          cantidad: s.cantidad || 1,
+          costo: s.costo || 0,
+          ganancia: s.ganancia || 0,
+          valor_neto: s.valor_neto || 0,
+          iva: s.iva || 0,
+          valor_total: s.valor_total || 0,
+          margen: s.margen || 0,
+          tipo_doc_costo: s.tipo_doc_costo || 'factura',
+          approved: false,
+        }));
+        
+        await supabase.from('event_items').insert(newDrafts);
         setCustomPrompt(''); // Clear prompt after adding to draft
       }
     } catch (error: any) {
@@ -429,9 +484,8 @@ export default function EventDetailPage() {
           <Card className="shadow-xs glass-card border-border/70">
             <CardContent className="p-4 sm:p-6">
               <AiSuggestionsGrid 
-                suggestions={suggestions} 
+                draftItems={draftItems} 
                 eventId={id} 
-                onItemApproved={fetchEventData} 
               />
             </CardContent>
           </Card>

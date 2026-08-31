@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AiSuggestion } from '@/types';
+import { useState, useEffect, useCallback } from 'react';
+import { EventItem, AiSuggestion } from '@/types';
 import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFromTotal } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,8 @@ import {
 import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList } from 'lucide-react';
 
 interface AiSuggestionsGridProps {
-  suggestions: AiSuggestion[];
+  draftItems?: EventItem[];
   eventId: string;
-  onItemApproved: () => void;
 }
 
 const emptySuggestion: AiSuggestion = {
@@ -40,42 +39,54 @@ const emptySuggestion: AiSuggestion = {
 };
 
 export function AiSuggestionsGrid({
-  suggestions: initialSuggestions,
+  draftItems = [],
   eventId,
-  onItemApproved,
 }: AiSuggestionsGridProps) {
-  const [editableSuggestions, setEditableSuggestions] = useState<AiSuggestion[]>([]);
+  const [editableSuggestions, setEditableSuggestions] = useState<EventItem[]>(draftItems);
   const [manualItem, setManualItem] = useState<AiSuggestion>({ ...emptySuggestion, id: 'manual' });
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [approvingAll, setApprovingAll] = useState(false);
   const supabase = createClient();
   
-  // Track how many we've ingested so we only append new ones
-  const [ingestedCount, setIngestedCount] = useState(0);
-
+  // Sync props to state (handling realtime updates from DB)
+  // We do a deep compare or just rely on useEffect
   useEffect(() => {
-    if (initialSuggestions.length > ingestedCount) {
-      const newItems = initialSuggestions.slice(ingestedCount).map((s, i) => ({ 
-        ...s, 
-        id: `draft-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 4)}` 
-      }));
-      setEditableSuggestions(prev => [...prev, ...newItems]);
-      setIngestedCount(initialSuggestions.length);
-    }
-  }, [initialSuggestions, ingestedCount]);
+    setEditableSuggestions(draftItems);
+  }, [draftItems]);
 
-  const handleInputChange = (id: string, field: keyof AiSuggestion, value: any) => {
+  const updateSupabase = async (updatedItem: EventItem) => {
+    if (!updatedItem.id) return;
+    try {
+      await supabase.from('event_items').update({
+        servicio: updatedItem.servicio,
+        detalle: updatedItem.detalle,
+        cantidad: updatedItem.cantidad,
+        costo: updatedItem.costo,
+        ganancia: updatedItem.ganancia,
+        valor_neto: updatedItem.valor_neto,
+        iva: updatedItem.iva,
+        valor_total: updatedItem.valor_total,
+        margen: updatedItem.margen,
+        tipo_doc_costo: updatedItem.tipo_doc_costo,
+      }).eq('id', updatedItem.id);
+    } catch (e) {
+      console.error("Error updating item", e);
+    }
+  };
+
+  const handleInputChange = (id: string, field: string, value: any, saveImmediately: boolean = false) => {
     const isManual = id === 'manual';
     const targetItem = isManual ? manualItem : editableSuggestions.find(s => s.id === id);
     if (!targetItem) return;
 
     let newValue = value;
-    if (['costo', 'ganancia', 'cantidad', 'valor_total'].includes(field as string)) {
+    if (['costo', 'ganancia', 'cantidad', 'valor_total'].includes(field)) {
       newValue = parseFloat(value) || 0;
     }
 
-    const updatedItem = { ...targetItem, [field]: newValue };
+    const updatedItem = { ...targetItem, [field]: newValue } as any;
     
+    // Add custom logic for sin_ganancia (local to manualItem, or implicit for EventItem)
     if (field === 'sin_ganancia' && newValue === true) {
       updatedItem.ganancia = 0;
     }
@@ -87,7 +98,7 @@ export function AiSuggestionsGrid({
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.iva;
       updatedItem.margen = financials.margen;
-    } else if (['costo', 'ganancia', 'sin_ganancia'].includes(field as string)) {
+    } else if (['costo', 'ganancia', 'sin_ganancia'].includes(field) || (field === 'iva_incluido')) {
       const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia);
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.iva;
@@ -98,51 +109,83 @@ export function AiSuggestionsGrid({
     if (isManual) {
       setManualItem(updatedItem as AiSuggestion);
     } else {
-      setEditableSuggestions((prev) => prev.map((item) => (item.id === id ? (updatedItem as AiSuggestion) : item)));
+      setEditableSuggestions((prev) => prev.map((item) => (item.id === id ? updatedItem : item)));
+      if (saveImmediately) {
+        updateSupabase(updatedItem);
+      }
     }
   };
 
-  // Add manual item into Draft (Borrador) list below
-  const handleAddManualToDraft = () => {
-    if (!manualItem.servicio.trim()) return;
+  const applyIvaIncluido = (id: string) => {
+    const isManual = id === 'manual';
+    const targetItem = isManual ? manualItem : editableSuggestions.find(s => s.id === id);
+    if (!targetItem || !targetItem.costo) return;
 
-    const newItem: AiSuggestion = {
-      ...manualItem,
-      id: `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-      servicio: manualItem.servicio.trim(),
-      detalle: manualItem.detalle.trim(),
-    };
+    // Si viene IVA incluido, el valor real neto es costo / 1.19
+    const newNetCosto = Math.round(targetItem.costo / 1.19);
+    
+    const updatedItem = { ...targetItem, costo: newNetCosto } as any;
+    
+    const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia);
+    updatedItem.valor_neto = financials.valorNeto;
+    updatedItem.iva = financials.iva;
+    updatedItem.valor_total = financials.valorTotal;
+    updatedItem.margen = financials.margen;
 
-    setEditableSuggestions(prev => [...prev, newItem]);
-    setManualItem({ ...emptySuggestion, id: 'manual' });
+    if (isManual) {
+      setManualItem(updatedItem as AiSuggestion);
+    } else {
+      setEditableSuggestions((prev) => prev.map((item) => (item.id === id ? updatedItem : item)));
+      updateSupabase(updatedItem); // Save immediately
+    }
   };
 
-  // Approve a single draft item and save to event_items (Approved items)
-  const handleApprove = async (item: AiSuggestion) => {
+  const handleBlur = (id: string) => {
+    if (id === 'manual') return;
+    const item = editableSuggestions.find(s => s.id === id);
+    if (item) {
+      updateSupabase(item);
+    }
+  };
+
+  // Add manual item into Draft (Borrador) list in DB
+  const handleAddManualToDraft = async () => {
+    if (!manualItem.servicio.trim()) return;
+
+    const newItem = {
+      event_id: eventId,
+      servicio: manualItem.servicio.trim(),
+      detalle: manualItem.detalle.trim(),
+      tipo_evento: manualItem.tipo_evento,
+      cantidad: manualItem.cantidad,
+      costo: manualItem.costo,
+      ganancia: manualItem.ganancia,
+      valor_neto: manualItem.valor_neto,
+      iva: manualItem.iva,
+      valor_total: manualItem.valor_total,
+      margen: manualItem.margen,
+      tipo_doc_costo: manualItem.tipo_doc_costo || 'factura',
+      approved: false,
+    };
+
+    setManualItem({ ...emptySuggestion, id: 'manual' });
+    
+    try {
+      await supabase.from('event_items').insert(newItem as any);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Approve a single draft item
+  const handleApprove = async (item: EventItem) => {
     if (!item.servicio) return;
     setLoadingId(item.id || 'unknown');
     
     try {
-      const { error } = await supabase.from('event_items').insert({
-        event_id: eventId,
-        servicio: item.servicio,
-        detalle: item.detalle,
-        tipo_evento: item.tipo_evento,
-        cantidad: item.cantidad,
-        costo: item.costo,
-        ganancia: item.ganancia,
-        valor_neto: item.valor_neto,
-        iva: item.iva,
-        valor_total: item.valor_total,
-        margen: item.margen,
-        tipo_doc_costo: item.tipo_doc_costo || 'factura',
-        approved: true,
-      } as any);
-
+      await updateSupabase(item); // ensure latest edits are saved
+      const { error } = await supabase.from('event_items').update({ approved: true }).eq('id', item.id);
       if (error) throw error;
-      
-      setEditableSuggestions((prev) => prev.filter((s) => s.id !== item.id));
-      onItemApproved();
     } catch (error) {
       console.error('Error approving item:', error);
       alert('Error al aprobar el ítem');
@@ -157,27 +200,14 @@ export function AiSuggestionsGrid({
     setApprovingAll(true);
 
     try {
-      const itemsToInsert = editableSuggestions.map(item => ({
-        event_id: eventId,
-        servicio: item.servicio,
-        detalle: item.detalle,
-        tipo_evento: item.tipo_evento,
-        cantidad: item.cantidad,
-        costo: item.costo,
-        ganancia: item.ganancia,
-        valor_neto: item.valor_neto,
-        iva: item.iva,
-        valor_total: item.valor_total,
-        margen: item.margen,
-        tipo_doc_costo: item.tipo_doc_costo || 'factura',
-        approved: true,
-      }));
-
-      const { error } = await supabase.from('event_items').insert(itemsToInsert as any);
+      // First save any pending changes just in case
+      for (const item of editableSuggestions) {
+        await updateSupabase(item);
+      }
+      
+      const ids = editableSuggestions.map(i => i.id);
+      const { error } = await supabase.from('event_items').update({ approved: true }).in('id', ids);
       if (error) throw error;
-
-      setEditableSuggestions([]);
-      onItemApproved();
     } catch (error) {
       console.error('Error approving all items:', error);
       alert('Error al aprobar todos los ítems del borrador.');
@@ -186,13 +216,22 @@ export function AiSuggestionsGrid({
     }
   };
 
-  const handleRemove = (id: string) => {
-    setEditableSuggestions((prev) => prev.filter((item) => item.id !== id));
+  const handleRemove = async (id: string) => {
+    try {
+      await supabase.from('event_items').delete().eq('id', id);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  const handleClearAll = () => {
+  const handleClearAll = async () => {
     if (window.confirm('¿Deseas vaciar todos los ítems del borrador?')) {
-      setEditableSuggestions([]);
+      try {
+        const ids = editableSuggestions.map(i => i.id);
+        await supabase.from('event_items').delete().in('id', ids);
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
@@ -254,13 +293,13 @@ export function AiSuggestionsGrid({
 
       {/* Table Container */}
       <div className="border rounded-xl overflow-x-auto shadow-xs bg-card custom-scrollbar">
-        <Table className="min-w-[1300px]">
+        <Table className="min-w-[1350px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="min-w-[200px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
               <TableHead className="min-w-[250px] text-xs font-bold uppercase tracking-wider">Detalle / Especificación</TableHead>
               <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider text-center">Cant.</TableHead>
-              <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider">Costo Unit.</TableHead>
+              <TableHead className="w-[140px] text-xs font-bold uppercase tracking-wider">Costo Unit.</TableHead>
               <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider">Ganancia Unit.</TableHead>
               <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">V. Neto</TableHead>
               <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">IVA (19%)</TableHead>
@@ -290,7 +329,7 @@ export function AiSuggestionsGrid({
               <TableCell className="p-2">
                 <Input
                   placeholder="Detalle o especificación técnica..."
-                  value={manualItem.detalle}
+                  value={manualItem.detalle || ''}
                   onChange={(e) => handleInputChange('manual', 'detalle', e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && manualItem.servicio.trim()) {
@@ -319,13 +358,23 @@ export function AiSuggestionsGrid({
                     onChange={(e) => handleInputChange('manual', 'costo', e.target.value)}
                     className="h-8 text-sm w-full px-2 bg-background/90"
                   />
-                  <button
-                    type="button"
-                    onClick={() => handleInputChange('manual', 'tipo_doc_costo', manualItem.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta')}
-                    className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${manualItem.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
-                  >
-                    {manualItem.tipo_doc_costo || 'factura'}
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange('manual', 'tipo_doc_costo', manualItem.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta')}
+                      className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${manualItem.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
+                    >
+                      {manualItem.tipo_doc_costo || 'factura'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyIvaIncluido('manual')}
+                      className="flex-1 bg-zinc-100 text-zinc-600 border border-zinc-200 hover:bg-zinc-200 text-[9px] px-1 py-0.5 rounded font-semibold uppercase tracking-wider text-center"
+                      title="Haz clic si este costo ya tiene IVA. Desglosará el IVA automáticamente."
+                    >
+                      IVA INCL.
+                    </button>
+                  </div>
                 </div>
               </TableCell>
               <TableCell className="p-2 align-top">
@@ -399,14 +448,16 @@ export function AiSuggestionsGrid({
                     <Input
                       value={item.servicio}
                       onChange={(e) => handleInputChange(item.id!, 'servicio', e.target.value)}
+                      onBlur={() => handleBlur(item.id!)}
                       className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all font-medium"
                     />
                   </div>
                 </TableCell>
                 <TableCell className="p-2">
                   <Input
-                    value={item.detalle}
+                    value={item.detalle || ''}
                     onChange={(e) => handleInputChange(item.id!, 'detalle', e.target.value)}
+                    onBlur={() => handleBlur(item.id!)}
                     className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
                   />
                 </TableCell>
@@ -415,6 +466,7 @@ export function AiSuggestionsGrid({
                     type="number"
                     value={item.cantidad}
                     onChange={(e) => handleInputChange(item.id!, 'cantidad', e.target.value)}
+                    onBlur={() => handleBlur(item.id!)}
                     className="h-8 text-sm w-full text-center px-1"
                     min="1"
                   />
@@ -425,15 +477,26 @@ export function AiSuggestionsGrid({
                       type="number"
                       value={item.costo}
                       onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
+                      onBlur={() => handleBlur(item.id!)}
                       className="h-8 text-sm w-full px-2"
                     />
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange(item.id!, 'tipo_doc_costo', item.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta')}
-                      className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
-                    >
-                      {item.tipo_doc_costo || 'factura'}
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleInputChange(item.id!, 'tipo_doc_costo', item.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta', true)}
+                        className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
+                      >
+                        {item.tipo_doc_costo || 'factura'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => applyIvaIncluido(item.id!)}
+                        className="flex-1 bg-zinc-100 text-zinc-600 border border-zinc-200 hover:bg-zinc-200 text-[9px] px-1 py-0.5 rounded font-semibold uppercase tracking-wider text-center"
+                        title="Haz clic si este costo ya tiene IVA. Desglosará el IVA automáticamente."
+                      >
+                        IVA INCL.
+                      </button>
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell className="p-2 align-top">
@@ -442,15 +505,16 @@ export function AiSuggestionsGrid({
                       type="number"
                       value={item.ganancia}
                       onChange={(e) => handleInputChange(item.id!, 'ganancia', e.target.value)}
+                      onBlur={() => handleBlur(item.id!)}
                       className="h-8 text-sm w-full px-2"
-                      disabled={item.sin_ganancia}
+                      disabled={item.ganancia === 0 && item.valor_total > 0} 
                     />
                     <button
                       type="button"
-                      onClick={() => handleInputChange(item.id!, 'sin_ganancia', !item.sin_ganancia)}
-                      className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${item.sin_ganancia ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
+                      onClick={() => handleInputChange(item.id!, 'sin_ganancia', item.ganancia !== 0, true)}
+                      className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${(item.ganancia === 0 && item.costo > 0) ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
                     >
-                      {item.sin_ganancia ? 'SIN GANANCIA' : 'CON GANANCIA'}
+                      {(item.ganancia === 0 && item.costo > 0) ? 'SIN GANANCIA' : 'CON GANANCIA'}
                     </button>
                   </div>
                 </TableCell>
@@ -461,8 +525,8 @@ export function AiSuggestionsGrid({
                     type="number"
                     value={item.valor_total || ''}
                     onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
+                    onBlur={() => handleBlur(item.id!)}
                     className="h-8 text-sm w-full px-2 font-semibold"
-                    disabled={item.sin_ganancia}
                   />
                 </TableCell>
                 <TableCell className="p-2 align-top text-xs">{formatPercentage(item.margen)}</TableCell>
@@ -515,4 +579,3 @@ export function AiSuggestionsGrid({
     </div>
   );
 }
-
