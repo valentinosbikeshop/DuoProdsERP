@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { FileUpload } from '@/components/events/file-upload';
 import { AiSuggestionsGrid } from '@/components/events/ai-suggestions-grid';
 import { EventItemsTable } from '@/components/events/event-items-table';
+import { FloatingFinancialAdvisor } from '@/components/events/floating-financial-advisor';
 import { EditEventDialog } from '@/components/events/edit-event-dialog';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
 import { formatDateCL } from '@/lib/utils';
@@ -454,6 +455,7 @@ export default function EventDetailPage() {
               />
             </CardContent>
           </Card>
+          <FloatingFinancialAdvisor event={event} items={items} />
         </TabsContent>
       </Tabs>
     </div>
