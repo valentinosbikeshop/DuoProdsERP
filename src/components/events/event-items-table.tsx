@@ -49,7 +49,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
         .update({ cantidad: item.cantidad })
         .eq('id', id);
       if (error) throw error;
-      // Option to call onItemDeleted() to refresh if we want, but local state is already updated.
+      if (onItemDeleted) onItemDeleted(); // Refresh parent items to update FloatingFinancialAdvisor
     } catch (e) {
       console.error('Error updating quantity:', e);
     }
