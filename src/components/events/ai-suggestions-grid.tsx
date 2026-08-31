@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { EventItem, AiSuggestion } from '@/types';
 import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFromTotal } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
@@ -16,7 +16,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList } from 'lucide-react';
+import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine } from 'lucide-react';
 
 interface AiSuggestionsGridProps {
   draftItems?: EventItem[];
@@ -46,10 +46,10 @@ export function AiSuggestionsGrid({
   const [manualItem, setManualItem] = useState<AiSuggestion>({ ...emptySuggestion, id: 'manual' });
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [approvingAll, setApprovingAll] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [expandedParents, setExpandedParents] = useState<string[]>([]);
   const supabase = createClient();
   
-  // Sync props to state (handling realtime updates from DB)
-  // We do a deep compare or just rely on useEffect
   useEffect(() => {
     setEditableSuggestions(draftItems);
   }, [draftItems]);
@@ -68,6 +68,7 @@ export function AiSuggestionsGrid({
         valor_total: updatedItem.valor_total,
         margen: updatedItem.margen,
         tipo_doc_costo: updatedItem.tipo_doc_costo,
+        parent_id: updatedItem.parent_id,
       }).eq('id', updatedItem.id);
     } catch (e) {
       console.error("Error updating item", e);
@@ -86,7 +87,6 @@ export function AiSuggestionsGrid({
 
     const updatedItem = { ...targetItem, [field]: newValue } as any;
     
-    // Add custom logic for sin_ganancia (local to manualItem, or implicit for EventItem)
     if (field === 'sin_ganancia' && newValue === true) {
       updatedItem.ganancia = 0;
     }
@@ -109,24 +109,50 @@ export function AiSuggestionsGrid({
     if (isManual) {
       setManualItem(updatedItem as AiSuggestion);
     } else {
-      setEditableSuggestions((prev) => prev.map((item) => (item.id === id ? updatedItem : item)));
+      let newSuggestions = editableSuggestions.map((item) => (item.id === id ? updatedItem : item));
+      
+      // If a child is updated, recalculate parent's cost
+      if (updatedItem.parent_id && ['costo', 'cantidad'].includes(field)) {
+        const siblingsAndSelf = newSuggestions.filter(s => s.parent_id === updatedItem.parent_id);
+        const newParentCost = siblingsAndSelf.reduce((sum, s) => sum + (s.costo * s.cantidad), 0);
+        
+        newSuggestions = newSuggestions.map(item => {
+          if (item.id === updatedItem.parent_id) {
+            const parentFinancials = calculateFinancials(newParentCost, item.ganancia);
+            const newParent = {
+              ...item,
+              costo: newParentCost,
+              valor_neto: parentFinancials.valorNeto,
+              iva: parentFinancials.iva,
+              valor_total: parentFinancials.valorTotal,
+              margen: parentFinancials.margen
+            };
+            if (saveImmediately) updateSupabase(newParent);
+            return newParent;
+          }
+          return item;
+        });
+      }
+
+      setEditableSuggestions(newSuggestions);
       if (saveImmediately) {
         updateSupabase(updatedItem);
       }
     }
   };
 
-
-
   const handleBlur = (id: string) => {
     if (id === 'manual') return;
     const item = editableSuggestions.find(s => s.id === id);
     if (item) {
       updateSupabase(item);
+      if (item.parent_id) {
+         const parent = editableSuggestions.find(s => s.id === item.parent_id);
+         if (parent) updateSupabase(parent);
+      }
     }
   };
 
-  // Add manual item into Draft (Borrador) list in DB
   const handleAddManualToDraft = async () => {
     if (!manualItem.servicio.trim()) return;
 
@@ -155,14 +181,17 @@ export function AiSuggestionsGrid({
     }
   };
 
-  // Approve a single draft item
   const handleApprove = async (item: EventItem) => {
     if (!item.servicio) return;
     setLoadingId(item.id || 'unknown');
     
     try {
-      await updateSupabase(item); // ensure latest edits are saved
-      const { error } = await (supabase.from('event_items') as any).update({ approved: true }).eq('id', item.id);
+      await updateSupabase(item); 
+      // If it's a parent, approve children too
+      const childrenIds = editableSuggestions.filter(s => s.parent_id === item.id).map(s => s.id);
+      const idsToApprove = [item.id, ...childrenIds];
+      
+      const { error } = await (supabase.from('event_items') as any).update({ approved: true }).in('id', idsToApprove);
       if (error) throw error;
     } catch (error) {
       console.error('Error approving item:', error);
@@ -172,13 +201,11 @@ export function AiSuggestionsGrid({
     }
   };
 
-  // Approve ALL items in draft list
   const handleApproveAll = async () => {
     if (editableSuggestions.length === 0) return;
     setApprovingAll(true);
 
     try {
-      // First save any pending changes just in case
       for (const item of editableSuggestions) {
         await updateSupabase(item);
       }
@@ -196,7 +223,10 @@ export function AiSuggestionsGrid({
 
   const handleRemove = async (id: string) => {
     try {
-      await (supabase.from('event_items') as any).delete().eq('id', id);
+      const childrenIds = editableSuggestions.filter(s => s.parent_id === id).map(s => s.id);
+      const idsToRemove = [id, ...childrenIds];
+      await (supabase.from('event_items') as any).delete().in('id', idsToRemove);
+      setSelectedIds(prev => prev.filter(selId => !idsToRemove.includes(selId)));
     } catch (e) {
       console.error(e);
     }
@@ -207,13 +237,86 @@ export function AiSuggestionsGrid({
       try {
         const ids = editableSuggestions.map(i => i.id);
         await (supabase.from('event_items') as any).delete().in('id', ids);
+        setSelectedIds([]);
       } catch (e) {
         console.error(e);
       }
     }
   };
 
-  const totals = editableSuggestions.reduce(
+  const handleConsolidate = async () => {
+    if (selectedIds.length < 2) return;
+    
+    const name = window.prompt("Ingresa el nombre del producto consolidado (Ej: Piscolas (100 un)):");
+    if (!name || !name.trim()) return;
+
+    const selectedItems = editableSuggestions.filter(s => selectedIds.includes(s.id!));
+    const totalCost = selectedItems.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
+    const financials = calculateFinancials(totalCost, 0);
+
+    const parentItem = {
+      event_id: eventId,
+      servicio: name.trim(),
+      detalle: 'Consolidado',
+      tipo_evento: 'Consolidado',
+      cantidad: 1,
+      costo: totalCost,
+      ganancia: 0,
+      valor_neto: financials.valorNeto,
+      iva: financials.iva,
+      valor_total: financials.valorTotal,
+      margen: financials.margen,
+      tipo_doc_costo: 'factura',
+      approved: false,
+      parent_id: null
+    };
+
+    try {
+      // 1. Insert parent
+      const { data: insertedParent, error: insertError } = await (supabase.from('event_items') as any)
+        .insert(parentItem)
+        .select()
+        .single();
+        
+      if (insertError || !insertedParent) throw insertError || new Error("Failed to insert parent");
+
+      // 2. Update children to set parent_id, and reset their ganancia to 0 to prevent double margin if we want
+      for (const child of selectedItems) {
+        const childFinancials = calculateFinancials(child.costo, 0); 
+        await (supabase.from('event_items') as any).update({ 
+          parent_id: insertedParent.id,
+          ganancia: 0,
+          valor_neto: childFinancials.valorNeto,
+          iva: childFinancials.iva,
+          valor_total: childFinancials.valorTotal,
+          margen: childFinancials.margen
+        }).eq('id', child.id);
+      }
+      
+      setSelectedIds([]);
+      setExpandedParents(prev => [...prev, insertedParent.id]);
+    } catch (e) {
+      console.error("Error consolidating items", e);
+      alert("Hubo un error al consolidar los ítems.");
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleExpand = (id: string) => {
+    setExpandedParents(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const topLevelItems = editableSuggestions.filter(s => !s.parent_id);
+  
+  // Calculate totals only from top level items to prevent double counting
+  const totals = topLevelItems.reduce(
     (acc, item) => ({
       costo: acc.costo + (item.costo * item.cantidad),
       ganancia: acc.ganancia + (item.ganancia * item.cantidad),
@@ -223,6 +326,147 @@ export function AiSuggestionsGrid({
     }),
     { costo: 0, ganancia: 0, valor_neto: 0, iva: 0, valor_total: 0 }
   );
+
+  const renderRow = (item: EventItem, index: number, isChild: boolean = false) => {
+    const isSelected = selectedIds.includes(item.id!);
+    const hasChildren = editableSuggestions.some(s => s.parent_id === item.id);
+    const isExpanded = expandedParents.includes(item.id!);
+
+    return (
+      <TableRow key={item.id} className={`hover:bg-muted/30 transition-colors ${isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''}`}>
+        {!isChild ? (
+          <TableCell className="p-2 text-center w-[40px]">
+             <input 
+               type="checkbox" 
+               checked={isSelected} 
+               onChange={() => toggleSelect(item.id!)}
+               className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+             />
+          </TableCell>
+        ) : (
+          <TableCell className="w-[40px]"></TableCell>
+        )}
+        
+        <TableCell className="p-2">
+          <div className="flex items-center gap-2">
+            {!isChild && hasChildren && (
+              <button onClick={() => toggleExpand(item.id!)} className="p-0.5 hover:bg-muted rounded text-muted-foreground flex-shrink-0">
+                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+            )}
+            {!hasChildren && !isChild && <span className="w-5 flex-shrink-0" />}
+            {isChild && <div className="w-4 h-px bg-border ml-2 mr-1 flex-shrink-0"></div>}
+            
+            <Input
+              value={item.servicio}
+              onChange={(e) => handleInputChange(item.id!, 'servicio', e.target.value)}
+              onBlur={() => handleBlur(item.id!)}
+              className={`h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all ${!isChild ? 'font-semibold' : 'font-medium text-muted-foreground'}`}
+              readOnly={hasChildren && !isExpanded} 
+            />
+          </div>
+        </TableCell>
+        <TableCell className="p-2">
+          <Input
+            value={item.detalle || ''}
+            onChange={(e) => handleInputChange(item.id!, 'detalle', e.target.value)}
+            onBlur={() => handleBlur(item.id!)}
+            className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
+          />
+        </TableCell>
+        <TableCell className="p-2">
+          <Input
+            type="number"
+            value={item.cantidad}
+            onChange={(e) => handleInputChange(item.id!, 'cantidad', e.target.value)}
+            onBlur={() => handleBlur(item.id!)}
+            className="h-8 text-sm w-full text-center px-1"
+            min="1"
+            disabled={hasChildren} 
+          />
+        </TableCell>
+        <TableCell className="p-2">
+          <div className="flex flex-col gap-1 w-full">
+            <Input
+              type="number"
+              value={item.costo}
+              onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
+              onBlur={() => handleBlur(item.id!)}
+              className="h-8 text-sm w-full px-2"
+              disabled={hasChildren} 
+            />
+            <div className="flex gap-1">
+              <button
+                type="button"
+                onClick={() => handleInputChange(item.id!, 'tipo_doc_costo', item.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta', true)}
+                className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
+              >
+                {item.tipo_doc_costo || 'factura'}
+              </button>
+            </div>
+          </div>
+        </TableCell>
+        <TableCell className="p-2 align-top">
+          <div className="flex flex-col gap-1 w-full">
+            <Input
+              type="number"
+              value={item.ganancia}
+              onChange={(e) => handleInputChange(item.id!, 'ganancia', e.target.value)}
+              onBlur={() => handleBlur(item.id!)}
+              className="h-8 text-sm w-full px-2"
+              disabled={item.ganancia === 0 && item.valor_total > 0} 
+            />
+            <button
+              type="button"
+              onClick={() => handleInputChange(item.id!, 'sin_ganancia', item.ganancia !== 0, true)}
+              className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${(item.ganancia === 0 && item.costo > 0) ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
+            >
+              {(item.ganancia === 0 && item.costo > 0) ? 'SIN GANANCIA' : 'CON GANANCIA'}
+            </button>
+          </div>
+        </TableCell>
+        <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(item.valor_neto)}</TableCell>
+        <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(item.iva)}</TableCell>
+        <TableCell className="p-2 align-top font-semibold">
+          <Input
+            type="number"
+            value={item.valor_total || ''}
+            onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
+            onBlur={() => handleBlur(item.id!)}
+            className="h-8 text-sm w-full px-2 font-semibold"
+          />
+        </TableCell>
+        <TableCell className="p-2 align-top text-xs">{formatPercentage(item.margen)}</TableCell>
+        <TableCell className="p-2 align-top text-right font-bold text-primary">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+        <TableCell className="p-2 align-top text-center">
+          <div className="flex items-center justify-center gap-1.5">
+            {!isChild && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 border-green-200 transition-all shadow-2xs"
+                onClick={() => handleApprove(item)}
+                disabled={loadingId === item.id || approvingAll}
+                title="Aprobar e incorporar a Ítems Aprobados"
+              >
+                {loadingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+              </Button>
+            )}
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-red-200 transition-all shadow-2xs"
+              onClick={() => handleRemove(item.id!)}
+              disabled={loadingId === item.id || approvingAll}
+              title={isChild ? "Eliminar insumo" : "Descartar del borrador"}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -236,7 +480,7 @@ export function AiSuggestionsGrid({
             <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
               Borrador de Costos y Servicios
               <Badge variant="secondary" className="font-normal text-xs px-2 py-0.5">
-                {editableSuggestions.length} {editableSuggestions.length === 1 ? 'ítem' : 'ítems'}
+                {topLevelItems.length} {topLevelItems.length === 1 ? 'ítem principal' : 'ítems principales'}
               </Badge>
             </h3>
             <p className="text-xs text-muted-foreground">
@@ -245,28 +489,41 @@ export function AiSuggestionsGrid({
           </div>
         </div>
 
-        {editableSuggestions.length > 0 && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {selectedIds.length >= 2 && (
             <Button
               size="sm"
-              variant="outline"
-              onClick={handleClearAll}
-              className="h-8 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 border-border/80 gap-1"
+              onClick={handleConsolidate}
+              className="h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs animate-in fade-in zoom-in"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              Vaciar Borrador
+              <Combine className="h-3.5 w-3.5" />
+              Consolidar {selectedIds.length} ítems
             </Button>
-            <Button
-              size="sm"
-              onClick={handleApproveAll}
-              disabled={approvingAll}
-              className="h-8 text-xs gap-1.5 bg-green-600 hover:bg-green-700 text-white shadow-xs"
-            >
-              {approvingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
-              Aprobar Todos ({editableSuggestions.length})
-            </Button>
-          </div>
-        )}
+          )}
+
+          {editableSuggestions.length > 0 && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleClearAll}
+                className="h-8 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 border-border/80 gap-1"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Vaciar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleApproveAll}
+                disabled={approvingAll}
+                className="h-8 text-xs gap-1.5 bg-green-600 hover:bg-green-700 text-white shadow-xs"
+              >
+                {approvingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />}
+                Aprobar Todos ({topLevelItems.length})
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Table Container */}
@@ -274,6 +531,7 @@ export function AiSuggestionsGrid({
         <Table className="min-w-[1350px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[200px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
               <TableHead className="min-w-[250px] text-xs font-bold uppercase tracking-wider">Detalle / Especificación</TableHead>
               <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider text-center">Cant.</TableHead>
@@ -290,6 +548,7 @@ export function AiSuggestionsGrid({
           <TableBody>
             {/* Quick Manual Add Row */}
             <TableRow className="bg-primary/5 border-b-2 border-primary/20 hover:bg-primary/10 transition-colors">
+              <TableCell className="w-[40px]"></TableCell>
               <TableCell className="p-2">
                 <Input
                   placeholder="+ Nuevo servicio o gasto..."
@@ -397,7 +656,7 @@ export function AiSuggestionsGrid({
             {/* Empty State */}
             {editableSuggestions.length === 0 && (
               <TableRow>
-                <TableCell colSpan={11} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={12} className="py-12 text-center text-muted-foreground">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Sparkles className="h-8 w-8 text-muted-foreground/40" />
                     <p className="text-sm font-medium">El borrador está vacío</p>
@@ -409,122 +668,26 @@ export function AiSuggestionsGrid({
               </TableRow>
             )}
 
-            {/* Draft Items List */}
-            {editableSuggestions.map((item, index) => (
-              <TableRow key={item.id} className="hover:bg-muted/30 transition-colors">
-                <TableCell className="p-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-muted-foreground font-mono w-4">{index + 1}.</span>
-                    <Input
-                      value={item.servicio}
-                      onChange={(e) => handleInputChange(item.id!, 'servicio', e.target.value)}
-                      onBlur={() => handleBlur(item.id!)}
-                      className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all font-medium"
-                    />
-                  </div>
-                </TableCell>
-                <TableCell className="p-2">
-                  <Input
-                    value={item.detalle || ''}
-                    onChange={(e) => handleInputChange(item.id!, 'detalle', e.target.value)}
-                    onBlur={() => handleBlur(item.id!)}
-                    className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
-                  />
-                </TableCell>
-                <TableCell className="p-2">
-                  <Input
-                    type="number"
-                    value={item.cantidad}
-                    onChange={(e) => handleInputChange(item.id!, 'cantidad', e.target.value)}
-                    onBlur={() => handleBlur(item.id!)}
-                    className="h-8 text-sm w-full text-center px-1"
-                    min="1"
-                  />
-                </TableCell>
-                <TableCell className="p-2">
-                  <div className="flex flex-col gap-1 w-full">
-                    <Input
-                      type="number"
-                      value={item.costo}
-                      onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
-                      onBlur={() => handleBlur(item.id!)}
-                      className="h-8 text-sm w-full px-2"
-                    />
-                    <div className="flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleInputChange(item.id!, 'tipo_doc_costo', item.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta', true)}
-                        className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
-                      >
-                        {item.tipo_doc_costo || 'factura'}
-                      </button>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="p-2 align-top">
-                  <div className="flex flex-col gap-1 w-full">
-                    <Input
-                      type="number"
-                      value={item.ganancia}
-                      onChange={(e) => handleInputChange(item.id!, 'ganancia', e.target.value)}
-                      onBlur={() => handleBlur(item.id!)}
-                      className="h-8 text-sm w-full px-2"
-                      disabled={item.ganancia === 0 && item.valor_total > 0} 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleInputChange(item.id!, 'sin_ganancia', item.ganancia !== 0, true)}
-                      className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${(item.ganancia === 0 && item.costo > 0) ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
-                    >
-                      {(item.ganancia === 0 && item.costo > 0) ? 'SIN GANANCIA' : 'CON GANANCIA'}
-                    </button>
-                  </div>
-                </TableCell>
-                <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(item.valor_neto)}</TableCell>
-                <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(item.iva)}</TableCell>
-                <TableCell className="p-2 align-top font-semibold">
-                  <Input
-                    type="number"
-                    value={item.valor_total || ''}
-                    onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
-                    onBlur={() => handleBlur(item.id!)}
-                    className="h-8 text-sm w-full px-2 font-semibold"
-                  />
-                </TableCell>
-                <TableCell className="p-2 align-top text-xs">{formatPercentage(item.margen)}</TableCell>
-                <TableCell className="p-2 align-top text-right font-bold text-primary">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
-                <TableCell className="p-2 align-top text-center">
-                  <div className="flex items-center justify-center gap-1.5">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8 bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 border-green-200 transition-all shadow-2xs"
-                      onClick={() => handleApprove(item)}
-                      disabled={loadingId === item.id || approvingAll}
-                      title="Aprobar e incorporar a Ítems Aprobados"
-                    >
-                      {loadingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-red-200 transition-all shadow-2xs"
-                      onClick={() => handleRemove(item.id!)}
-                      disabled={loadingId === item.id || approvingAll}
-                      title="Descartar del borrador"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+            {/* Draft Items List (Tree Rendering) */}
+            {topLevelItems.map((item, index) => {
+              const children = editableSuggestions.filter(s => s.parent_id === item.id);
+              const isExpanded = expandedParents.includes(item.id!);
+              
+              return (
+                <React.Fragment key={item.id}>
+                  {renderRow(item, index, false)}
+                  {isExpanded && children.map((child, childIdx) => (
+                    renderRow(child, childIdx, true)
+                  ))}
+                </React.Fragment>
+              );
+            })}
           </TableBody>
 
           {editableSuggestions.length > 0 && (
             <TableFooter>
               <TableRow className="bg-muted/50 font-semibold">
-                <TableCell colSpan={3} className="font-bold text-right">Totales en Borrador:</TableCell>
+                <TableCell colSpan={4} className="font-bold text-right">Totales en Borrador:</TableCell>
                 <TableCell>{formatCLP(totals.costo)}</TableCell>
                 <TableCell>{formatCLP(totals.ganancia)}</TableCell>
                 <TableCell>{formatCLP(totals.valor_neto)}</TableCell>

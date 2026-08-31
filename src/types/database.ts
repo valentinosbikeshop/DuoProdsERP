@@ -51,6 +51,7 @@ export type EventItem = {
   factura_url?: string | null;
   approved: boolean;
   created_at: string;
+  parent_id?: string | null;
 };
 
 // For Supabase client type safety
