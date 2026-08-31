@@ -57,7 +57,7 @@ export function AiSuggestionsGrid({
   const updateSupabase = async (updatedItem: EventItem) => {
     if (!updatedItem.id) return;
     try {
-      await supabase.from('event_items').update({
+      await (supabase.from('event_items') as any).update({
         servicio: updatedItem.servicio,
         detalle: updatedItem.detalle,
         cantidad: updatedItem.cantidad,
@@ -171,7 +171,7 @@ export function AiSuggestionsGrid({
     setManualItem({ ...emptySuggestion, id: 'manual' });
     
     try {
-      await supabase.from('event_items').insert(newItem as any);
+      await (supabase.from('event_items') as any).insert(newItem);
     } catch (e) {
       console.error(e);
     }
@@ -184,7 +184,7 @@ export function AiSuggestionsGrid({
     
     try {
       await updateSupabase(item); // ensure latest edits are saved
-      const { error } = await supabase.from('event_items').update({ approved: true }).eq('id', item.id);
+      const { error } = await (supabase.from('event_items') as any).update({ approved: true }).eq('id', item.id);
       if (error) throw error;
     } catch (error) {
       console.error('Error approving item:', error);
@@ -206,7 +206,7 @@ export function AiSuggestionsGrid({
       }
       
       const ids = editableSuggestions.map(i => i.id);
-      const { error } = await supabase.from('event_items').update({ approved: true }).in('id', ids);
+      const { error } = await (supabase.from('event_items') as any).update({ approved: true }).in('id', ids);
       if (error) throw error;
     } catch (error) {
       console.error('Error approving all items:', error);
@@ -218,7 +218,7 @@ export function AiSuggestionsGrid({
 
   const handleRemove = async (id: string) => {
     try {
-      await supabase.from('event_items').delete().eq('id', id);
+      await (supabase.from('event_items') as any).delete().eq('id', id);
     } catch (e) {
       console.error(e);
     }
@@ -228,7 +228,7 @@ export function AiSuggestionsGrid({
     if (window.confirm('¿Deseas vaciar todos los ítems del borrador?')) {
       try {
         const ids = editableSuggestions.map(i => i.id);
-        await supabase.from('event_items').delete().in('id', ids);
+        await (supabase.from('event_items') as any).delete().in('id', ids);
       } catch (e) {
         console.error(e);
       }
