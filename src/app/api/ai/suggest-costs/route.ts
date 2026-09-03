@@ -36,7 +36,8 @@ export async function POST(req: NextRequest) {
       eventDescription = '', 
       parsedDocuments = '', 
       eventType = '',
-      customPrompt = '' 
+      customPrompt = '',
+      customQuoteLocation = ''
     } = body;
 
     // Input validation: at least one input must be provided
@@ -137,7 +138,7 @@ DEBES REALIZAR UN DESGLOSE EXHAUSTIVO Y DETALLADO:
       userPrompt = `REQUERIMIENTO ESPECÍFICO DEL USUARIO A DESGLOSAR:
 "${customPrompt.trim()}"
 
-Contexto adicional del evento:
+${customQuoteLocation ? `LUGAR/PROVEEDOR REQUERIDO PARA COTIZAR: "${customQuoteLocation.trim()}"\nAjusta los precios y sugerencias asumiendo que se comprará en este proveedor específico.\n\n` : ''}Contexto adicional del evento:
 - Descripción general del evento: ${eventDescription || 'Sin descripción adicional'}
 - Tipo de evento: ${eventType || 'General'}`;
     } else {
@@ -157,7 +158,7 @@ Tipo de evento: ${eventType}`;
     let response;
     let retries = 3;
     let delay = 1000;
-    const modelsToTry = ['gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-2.5-flash'];
+    const modelsToTry = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-pro'];
     let currentModelIndex = 0;
     
     while (retries > 0) {

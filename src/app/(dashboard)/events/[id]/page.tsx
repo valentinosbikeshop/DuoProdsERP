@@ -42,6 +42,7 @@ export default function EventDetailPage() {
   const [draftItems, setDraftItems] = useState<EventItem[]>([]);
   const [parsedText, setParsedText] = useState<string>('');
   const [customPrompt, setCustomPrompt] = useState<string>('');
+  const [customQuoteLocation, setCustomQuoteLocation] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [customAiLoading, setCustomAiLoading] = useState(false);
@@ -160,6 +161,7 @@ export default function EventDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customPrompt: customPrompt.trim(),
+          customQuoteLocation: customQuoteLocation.trim(),
           eventDescription: event?.description || '',
           eventType: event?.status || '',
         }),
@@ -430,6 +432,20 @@ export default function EventDetailPage() {
                       disabled={customAiLoading || isCompleted}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey && customPrompt.trim()) {
+                          e.preventDefault();
+                          handleGenerateCustomBreakdown();
+                        }
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={customQuoteLocation}
+                      onChange={(e) => setCustomQuoteLocation(e.target.value)}
+                      placeholder="Lugar de cotización (Opcional, Ej: Supermercado Líder, La Vega...)"
+                      className="w-full mt-2 rounded-xl border border-input/80 bg-background/80 px-3.5 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 font-normal shadow-2xs"
+                      disabled={customAiLoading || isCompleted}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && customPrompt.trim()) {
                           e.preventDefault();
                           handleGenerateCustomBreakdown();
                         }
