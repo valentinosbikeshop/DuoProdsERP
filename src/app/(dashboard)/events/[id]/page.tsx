@@ -502,6 +502,7 @@ export default function EventDetailPage() {
               <AiSuggestionsGrid 
                 draftItems={draftItems} 
                 eventId={id} 
+                onDraftChanged={fetchEventData}
               />
             </CardContent>
           </Card>

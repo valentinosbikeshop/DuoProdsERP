@@ -21,6 +21,7 @@ import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, C
 interface AiSuggestionsGridProps {
   draftItems?: EventItem[];
   eventId: string;
+  onDraftChanged?: () => void;
 }
 
 const emptySuggestion: AiSuggestion = {
@@ -41,6 +42,7 @@ const emptySuggestion: AiSuggestion = {
 export function AiSuggestionsGrid({
   draftItems = [],
   eventId,
+  onDraftChanged,
 }: AiSuggestionsGridProps) {
   const [editableSuggestions, setEditableSuggestions] = useState<EventItem[]>(draftItems);
   const [manualItem, setManualItem] = useState<AiSuggestion>({ ...emptySuggestion, id: 'manual' });
@@ -176,8 +178,10 @@ export function AiSuggestionsGrid({
     
     try {
       await (supabase.from('event_items') as any).insert(newItem);
+      if (onDraftChanged) onDraftChanged();
     } catch (e) {
       console.error(e);
+      alert('Error al agregar el ítem manual.');
     }
   };
 
@@ -193,6 +197,8 @@ export function AiSuggestionsGrid({
       
       const { error } = await (supabase.from('event_items') as any).update({ approved: true }).in('id', idsToApprove);
       if (error) throw error;
+      setEditableSuggestions(prev => prev.filter(s => !idsToApprove.includes(s.id!)));
+      if (onDraftChanged) onDraftChanged();
     } catch (error) {
       console.error('Error approving item:', error);
       alert('Error al aprobar el ítem');
@@ -213,6 +219,8 @@ export function AiSuggestionsGrid({
       const ids = editableSuggestions.map(i => i.id);
       const { error } = await (supabase.from('event_items') as any).update({ approved: true }).in('id', ids);
       if (error) throw error;
+      setEditableSuggestions([]);
+      if (onDraftChanged) onDraftChanged();
     } catch (error) {
       console.error('Error approving all items:', error);
       alert('Error al aprobar todos los ítems del borrador.');
@@ -227,8 +235,11 @@ export function AiSuggestionsGrid({
       const idsToRemove = [id, ...childrenIds];
       await (supabase.from('event_items') as any).delete().in('id', idsToRemove);
       setSelectedIds(prev => prev.filter(selId => !idsToRemove.includes(selId)));
+      setEditableSuggestions(prev => prev.filter(item => !idsToRemove.includes(item.id!)));
+      if (onDraftChanged) onDraftChanged();
     } catch (e) {
       console.error(e);
+      alert('Error al rechazar el ítem.');
     }
   };
 
@@ -238,8 +249,11 @@ export function AiSuggestionsGrid({
         const ids = editableSuggestions.map(i => i.id);
         await (supabase.from('event_items') as any).delete().in('id', ids);
         setSelectedIds([]);
+        setEditableSuggestions([]);
+        if (onDraftChanged) onDraftChanged();
       } catch (e) {
         console.error(e);
+        alert('Error al vaciar los ítems.');
       }
     }
   };
@@ -295,6 +309,7 @@ export function AiSuggestionsGrid({
       
       setSelectedIds([]);
       setExpandedParents(prev => [...prev, insertedParent.id]);
+      if (onDraftChanged) onDraftChanged();
     } catch (e) {
       console.error("Error consolidating items", e);
       alert("Hubo un error al consolidar los ítems.");
