@@ -53,7 +53,10 @@ CREATE TABLE public.event_items (
   valor_total NUMERIC NOT NULL,
   margen NUMERIC NOT NULL,
   approved BOOLEAN NOT NULL DEFAULT false,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  tipo_doc_costo TEXT,
+  factura_url TEXT,
+  parent_id UUID REFERENCES public.event_items(id) ON DELETE CASCADE
 );
 ALTER TABLE public.event_items ENABLE ROW LEVEL SECURITY;
 
