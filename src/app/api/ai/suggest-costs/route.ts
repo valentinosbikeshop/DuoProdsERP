@@ -158,7 +158,7 @@ Tipo de evento: ${eventType}`;
     let response;
     let retries = 3;
     let delay = 1000;
-    const modelsToTry = ['gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-2.5-pro'];
+    const modelsToTry = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'];
     let currentModelIndex = 0;
     
     while (retries > 0) {
