@@ -155,9 +155,13 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
       setSelectedIds([]);
       setExpandedParents(prev => [...prev, insertedParent.id]);
       if (onItemDeleted) onItemDeleted(); // Refresh items
-    } catch (e) {
+    } catch (e: any) {
       console.error("Error consolidating items", e);
-      alert("Hubo un error al consolidar los ítems.");
+      if (e?.message?.includes("parent_id") || e?.code === "PGRST204") {
+        alert("Error en la Base de Datos: La columna 'parent_id' no existe en Supabase. Debes ejecutar el script 'add_parent_id.sql' en el SQL Editor de Supabase.");
+      } else {
+        alert(`Hubo un error al consolidar los ítems: ${e?.message || "Error desconocido"}`);
+      }
     }
   };
 
