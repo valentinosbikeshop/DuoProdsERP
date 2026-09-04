@@ -399,7 +399,7 @@ export function AiSuggestionsGrid({
             className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
           />
         </TableCell>
-        <TableCell className="p-2">
+        <TableCell className="p-2 border-r">
           <Input
             type="number"
             value={item.cantidad}
@@ -410,7 +410,9 @@ export function AiSuggestionsGrid({
             disabled={hasChildren} 
           />
         </TableCell>
-        <TableCell className="p-2">
+        
+        {/* EGRESOS */}
+        <TableCell className="p-2 bg-red-50/30">
           <div className="flex flex-col gap-1 w-full">
             <Input
               type="number"
@@ -451,7 +453,10 @@ export function AiSuggestionsGrid({
             </div>
           </div>
         </TableCell>
-        <TableCell className="p-2 align-top">
+        <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(item.costo * item.cantidad)}</TableCell>
+
+        {/* INGRESOS */}
+        <TableCell className="p-2 align-top bg-emerald-50/30">
           <div className="flex flex-col gap-1 w-full">
             <Input
               type="number"
@@ -470,19 +475,21 @@ export function AiSuggestionsGrid({
             </button>
           </div>
         </TableCell>
-        <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(item.valor_neto)}</TableCell>
-        <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(item.iva)}</TableCell>
-        <TableCell className="p-2 align-top font-semibold">
+        <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.valor_neto)}</TableCell>
+        <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.iva)}</TableCell>
+        <TableCell className="p-2 align-top font-semibold bg-emerald-50/30">
           <Input
             type="number"
             value={item.valor_total || ''}
             onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
             onBlur={() => handleBlur(item.id!)}
-            className="h-8 text-sm w-full px-2 font-semibold"
+            className="h-8 text-sm w-full px-2 font-semibold border-emerald-200 focus:border-emerald-500"
           />
         </TableCell>
-        <TableCell className="p-2 align-top text-xs">{formatPercentage(item.margen)}</TableCell>
-        <TableCell className="p-2 align-top text-right font-bold text-primary">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+        <TableCell className="p-2 align-top text-right font-bold text-emerald-700 bg-emerald-50/30 border-r">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+        
+        {/* RESUMEN Y ACCIONES */}
+        <TableCell className="p-2 align-top text-center text-xs font-semibold text-muted-foreground">{formatPercentage(item.margen)}</TableCell>
         <TableCell className="p-2 align-top text-center">
           <div className="flex items-center justify-center gap-1.5">
             {!isChild && (
@@ -575,19 +582,29 @@ export function AiSuggestionsGrid({
       <div className="border rounded-xl overflow-x-auto shadow-xs bg-card custom-scrollbar">
         <Table className="min-w-[1350px]">
           <TableHeader>
+            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
+              <TableHead colSpan={4} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
+              <TableHead colSpan={2} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
+              <TableHead colSpan={5} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
+              <TableHead colSpan={2} className="text-center font-bold text-muted-foreground">RESUMEN</TableHead>
+            </TableRow>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[40px]"></TableHead>
-              <TableHead className="min-w-[200px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
-              <TableHead className="min-w-[250px] text-xs font-bold uppercase tracking-wider">Detalle / Especificación</TableHead>
-              <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider text-center">Cant.</TableHead>
-              <TableHead className="w-[140px] text-xs font-bold uppercase tracking-wider">Costo Unit.</TableHead>
-              <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider">Ganancia Unit.</TableHead>
-              <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">V. Neto</TableHead>
-              <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">IVA (19%)</TableHead>
-              <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider">V. Total</TableHead>
-              <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider">Margen</TableHead>
-              <TableHead className="text-right w-[120px] text-xs font-bold uppercase tracking-wider">Subtotal</TableHead>
-              <TableHead className="w-[120px] text-center text-xs font-bold uppercase tracking-wider">Acciones</TableHead>
+              <TableHead className="min-w-[160px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
+              <TableHead className="min-w-[200px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
+              <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
+              
+              <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-red-50/20 border-r text-red-900/80">Total Costos</TableHead>
+              
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">Ganancia Unit.</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Neto</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">IVA (19%)</TableHead>
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Total Unit.</TableHead>
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-emerald-50/20 border-r text-emerald-900/80">Total Venta</TableHead>
+              
+              <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider text-center">Margen</TableHead>
+              <TableHead className="w-[100px] text-center text-xs font-bold uppercase tracking-wider">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -610,7 +627,7 @@ export function AiSuggestionsGrid({
               </TableCell>
               <TableCell className="p-2">
                 <Input
-                  placeholder="Detalle o especificación técnica..."
+                  placeholder="Detalle o especificación..."
                   value={manualItem.detalle || ''}
                   onChange={(e) => handleInputChange('manual', 'detalle', e.target.value)}
                   onKeyDown={(e) => {
@@ -622,7 +639,7 @@ export function AiSuggestionsGrid({
                   className="h-8 text-sm w-full bg-background/90"
                 />
               </TableCell>
-              <TableCell className="p-2">
+              <TableCell className="p-2 border-r">
                 <Input
                   type="number"
                   value={manualItem.cantidad || ''}
@@ -631,7 +648,9 @@ export function AiSuggestionsGrid({
                   min="1"
                 />
               </TableCell>
-              <TableCell className="p-2">
+              
+              {/* EGRESOS MANUAL */}
+              <TableCell className="p-2 bg-red-50/30">
                 <div className="flex flex-col gap-1 w-full">
                   <Input
                     type="number"
@@ -671,7 +690,10 @@ export function AiSuggestionsGrid({
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="p-2 align-top">
+              <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(manualItem.costo * manualItem.cantidad)}</TableCell>
+
+              {/* INGRESOS MANUAL */}
+              <TableCell className="p-2 align-top bg-emerald-50/30">
                 <div className="flex flex-col gap-1 w-full">
                   <Input
                     type="number"
@@ -690,20 +712,22 @@ export function AiSuggestionsGrid({
                   </button>
                 </div>
               </TableCell>
-              <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(manualItem.valor_neto)}</TableCell>
-              <TableCell className="p-2 align-top text-xs font-medium">{formatCLP(manualItem.iva)}</TableCell>
-              <TableCell className="p-2 align-top font-semibold text-primary">
+              <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.valor_neto)}</TableCell>
+              <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.iva)}</TableCell>
+              <TableCell className="p-2 align-top font-semibold text-emerald-700 bg-emerald-50/30">
                 <Input
                   type="number"
                   placeholder="0"
                   value={manualItem.valor_total || ''}
                   onChange={(e) => handleInputChange('manual', 'valor_total', e.target.value)}
-                  className="h-8 text-sm w-full px-2 bg-background/90 font-semibold"
+                  className="h-8 text-sm w-full px-2 bg-background/90 font-semibold border-emerald-200"
                   disabled={manualItem.sin_ganancia}
                 />
               </TableCell>
-              <TableCell className="p-2 align-top text-xs">{formatPercentage(manualItem.margen)}</TableCell>
-              <TableCell className="p-2 align-top text-right font-bold text-primary">{formatCLP(manualItem.valor_total * manualItem.cantidad)}</TableCell>
+              <TableCell className="p-2 align-top text-right font-bold text-emerald-700 bg-emerald-50/30 border-r">{formatCLP(manualItem.valor_total * manualItem.cantidad)}</TableCell>
+              
+              {/* RESUMEN Y ACCIONES MANUAL */}
+              <TableCell className="p-2 align-top text-center text-xs font-semibold text-muted-foreground">{formatPercentage(manualItem.margen)}</TableCell>
               <TableCell className="p-2 align-top text-center">
                 <Button
                   size="sm"
@@ -721,7 +745,7 @@ export function AiSuggestionsGrid({
             {/* Empty State */}
             {editableSuggestions.length === 0 && (
               <TableRow>
-                <TableCell colSpan={12} className="py-12 text-center text-muted-foreground">
+                <TableCell colSpan={13} className="py-12 text-center text-muted-foreground">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <Sparkles className="h-8 w-8 text-muted-foreground/40" />
                     <p className="text-sm font-medium">El borrador está vacío</p>
@@ -752,15 +776,15 @@ export function AiSuggestionsGrid({
           {editableSuggestions.length > 0 && (
             <TableFooter>
               <TableRow className="bg-muted/50 font-semibold">
-                <TableCell colSpan={4} className="font-bold text-right">Totales en Borrador:</TableCell>
-                <TableCell>{formatCLP(totals.costo)}</TableCell>
-                <TableCell>{formatCLP(totals.ganancia)}</TableCell>
-                <TableCell>{formatCLP(totals.valor_neto)}</TableCell>
-                <TableCell>{formatCLP(totals.iva)}</TableCell>
-                <TableCell className="font-bold text-foreground">{formatCLP(totals.valor_total)}</TableCell>
-                <TableCell colSpan={1}></TableCell>
-                <TableCell className="text-right font-bold text-primary text-base">{formatCLP(totals.valor_total)}</TableCell>
-                <TableCell></TableCell>
+                <TableCell colSpan={4} className="font-bold text-right border-r">Totales en Borrador:</TableCell>
+                <TableCell className="bg-red-50/20"></TableCell>
+                <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totals.costo)}</TableCell>
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.ganancia)}</TableCell>
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_neto)}</TableCell>
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.iva)}</TableCell>
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_total)}</TableCell>
+                <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700 text-base">{formatCLP(totals.valor_total)}</TableCell>
+                <TableCell colSpan={2}></TableCell>
               </TableRow>
             </TableFooter>
           )}

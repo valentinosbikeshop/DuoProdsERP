@@ -206,7 +206,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
     return (
       <TableRow key={item.id} className={`${isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''}`}>
         {!isCompleted ? (
-          <TableCell className="w-[40px] text-center">
+          <TableCell className="w-[40px] text-center p-2">
             {!isChild && (
               <input 
                 type="checkbox" 
@@ -220,7 +220,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
           <TableCell className="w-[10px]"></TableCell>
         )}
         
-        <TableCell className="font-medium">
+        <TableCell className="font-medium p-2">
           <div className="flex items-center gap-2">
             {!isChild && hasChildren && (
               <button onClick={() => toggleExpand(item.id!)} className="p-0.5 hover:bg-muted rounded text-muted-foreground flex-shrink-0">
@@ -230,41 +230,50 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
             {!hasChildren && !isChild && <span className="w-5 flex-shrink-0" />}
             {isChild && <div className="w-4 h-px bg-border ml-2 mr-1 flex-shrink-0"></div>}
             
-            <span className={isChild ? 'text-muted-foreground font-normal' : ''}>{item.servicio}</span>
+            <span className={isChild ? 'text-muted-foreground font-normal text-sm' : 'text-sm'}>{item.servicio}</span>
           </div>
         </TableCell>
-        <TableCell className="text-muted-foreground text-sm">{item.detalle}</TableCell>
-        <TableCell>{item.tipo_evento}</TableCell>
-        <TableCell>
+        <TableCell className="text-muted-foreground text-xs p-2">{item.detalle}</TableCell>
+        <TableCell className="text-xs p-2">{item.tipo_evento}</TableCell>
+        <TableCell className="p-2 border-r">
           {isCompleted ? (
-            item.cantidad
+            <span className="text-sm px-2">{item.cantidad}</span>
           ) : (
             <Input
               type="number"
               value={item.cantidad || ''}
               onChange={(e) => handleQuantityChange(item.id!, e.target.value)}
               onBlur={() => handleQuantityBlur(item.id!)}
-              className="h-8 w-16 text-center px-1"
+              className="h-8 w-14 text-center px-1 text-sm"
               min="1"
             />
           )}
         </TableCell>
-        <TableCell>
+        
+        {/* EGRESOS */}
+        <TableCell className="p-2 bg-red-50/30">
           <div className="flex flex-col gap-1">
-            {formatCLP(item.costo)}
-            <span className={`text-[10px] px-1 py-0.5 rounded border font-medium uppercase tracking-wider text-center w-max ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+            <span className="text-sm font-medium">{formatCLP(item.costo)}</span>
+            <span className={`text-[9px] px-1 py-0.5 rounded border font-bold uppercase tracking-wider text-center w-max ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-800 border-orange-200' : 'bg-blue-100 text-blue-800 border-blue-200'}`}>
               {item.tipo_doc_costo || 'factura'}
             </span>
           </div>
         </TableCell>
-        <TableCell className={isChild ? 'text-muted-foreground/60' : ''}>{formatCLP(item.ganancia)}</TableCell>
-        <TableCell className={isChild ? 'text-muted-foreground/60' : ''}>{formatCLP(item.valor_total)}</TableCell>
-        <TableCell className={isChild ? 'text-muted-foreground/60' : ''}>{formatPercentage(item.margen)}</TableCell>
-        <TableCell className={`text-right font-semibold ${isChild ? 'text-muted-foreground/60' : ''}`}>{formatCLP(item.valor_total * item.cantidad)}</TableCell>
-        <TableCell className="text-center">
+        <TableCell className={`p-2 text-right font-bold bg-red-50/30 border-r ${isChild ? 'text-red-700/60' : 'text-red-700'}`}>{formatCLP(item.costo * item.cantidad)}</TableCell>
+
+        {/* INGRESOS */}
+        <TableCell className={`p-2 text-sm bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80 font-medium'}`}>{formatCLP(item.ganancia)}</TableCell>
+        <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.valor_neto)}</TableCell>
+        <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva)}</TableCell>
+        <TableCell className={`p-2 text-sm font-semibold bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900'}`}>{formatCLP(item.valor_total)}</TableCell>
+        <TableCell className={`p-2 text-right font-bold bg-emerald-50/30 border-r ${isChild ? 'text-emerald-700/60' : 'text-emerald-700'}`}>{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+        
+        {/* RESUMEN */}
+        <TableCell className={`p-2 text-center text-xs font-semibold ${isChild ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>{formatPercentage(item.margen)}</TableCell>
+        <TableCell className="p-2 text-center">
           {item.tipo_doc_costo === 'factura' && !isChild && (
             item.factura_url ? (
-              <a href={item.factura_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-blue-600">
+              <a href={item.factura_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted text-blue-600 border border-blue-100 bg-blue-50">
                 <ExternalLink className="h-4 w-4" />
               </a>
             ) : (
@@ -280,10 +289,11 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
                 />
                 <Button
                   size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 text-muted-foreground hover:text-primary"
+                  variant="outline"
+                  className="h-8 w-8 text-muted-foreground hover:text-primary border-dashed"
                   onClick={() => document.getElementById(`file-${item.id}`)?.click()}
                   disabled={uploadingId === item.id || isCompleted}
+                  title="Subir Factura"
                 >
                   {uploadingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                 </Button>
@@ -292,7 +302,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
           )}
         </TableCell>
         {!isCompleted && (
-          <TableCell>
+          <TableCell className="p-2 text-center">
             <Button
               size="icon"
               variant="ghost"
@@ -324,22 +334,34 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
         </div>
       )}
       
-      <div className="border rounded-md overflow-x-auto">
-        <Table>
+      <div className="border rounded-md overflow-x-auto shadow-xs bg-card custom-scrollbar">
+        <Table className="min-w-[1350px]">
           <TableHeader>
-            <TableRow>
+            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
+              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
+              <TableHead colSpan={2} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
+              <TableHead colSpan={5} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
+              <TableHead colSpan={isCompleted ? 2 : 3} className="text-center font-bold text-muted-foreground">RESUMEN Y GESTIÓN</TableHead>
+            </TableRow>
+            <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[40px]"></TableHead>
-              <TableHead>Servicio</TableHead>
-              <TableHead>Detalle</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Cant.</TableHead>
-              <TableHead>Costo Unit.</TableHead>
-              <TableHead>Ganancia Unit.</TableHead>
-              <TableHead>V. Total Unit.</TableHead>
-              <TableHead>Margen</TableHead>
-              <TableHead className="text-right">Subtotal Fila</TableHead>
-              <TableHead className="w-[100px] text-center">Documento</TableHead>
-              {!isCompleted && <TableHead className="w-[80px]">Acciones</TableHead>}
+              <TableHead className="min-w-[160px] text-xs font-bold uppercase tracking-wider">Servicio</TableHead>
+              <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
+              <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">Tipo</TableHead>
+              <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
+              
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-red-50/20 border-r text-red-900/80">Total Costos</TableHead>
+              
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">Ganancia Unit.</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Neto</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">IVA (19%)</TableHead>
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Total Unit.</TableHead>
+              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-emerald-50/20 border-r text-emerald-900/80">Total Venta</TableHead>
+              
+              <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider text-center">Margen</TableHead>
+              <TableHead className="w-[90px] text-center text-xs font-bold uppercase tracking-wider">Documento</TableHead>
+              {!isCompleted && <TableHead className="w-[80px] text-center text-xs font-bold uppercase tracking-wider">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -356,14 +378,18 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
             })}
           </TableBody>
           <TableFooter>
-            <TableRow>
-              <TableCell colSpan={5} className="font-bold">Totales Globales</TableCell>
-              <TableCell>{formatCLP(totals.costo)}</TableCell>
-              <TableCell>{formatCLP(totals.ganancia)}</TableCell>
-              <TableCell colSpan={2}></TableCell>
-              <TableCell className="text-right font-bold text-primary text-lg">{formatCLP(totals.valor_total)}</TableCell>
-              <TableCell></TableCell>
-              {!isCompleted && <TableCell></TableCell>}
+            <TableRow className="bg-muted/50 font-semibold">
+              <TableCell colSpan={5} className="font-bold text-right border-r">Totales Globales:</TableCell>
+              <TableCell className="bg-red-50/20"></TableCell>
+              <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totals.costo)}</TableCell>
+              
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.ganancia)}</TableCell>
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_neto)}</TableCell>
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.iva)}</TableCell>
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_total)}</TableCell>
+              <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700 text-lg">{formatCLP(totals.valor_total)}</TableCell>
+              
+              <TableCell colSpan={isCompleted ? 2 : 3}></TableCell>
             </TableRow>
           </TableFooter>
         </Table>
