@@ -16,7 +16,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine } from 'lucide-react';
+import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy } from 'lucide-react';
 
 interface AiSuggestionsGridProps {
   draftItems?: EventItem[];
@@ -263,6 +263,129 @@ export function AiSuggestionsGrid({
     }
   };
 
+    const handleDuplicate = async (id: string) => {
+    try {
+      const itemToDuplicate = editableSuggestions.find(s => s.id === id);
+      if (!itemToDuplicate) return;
+
+      const isParent = itemToDuplicate.tipo_evento === 'Consolidado';
+      
+      const { id: _, created_at: __, ...itemData } = itemToDuplicate as any;
+      itemData.servicio = `${itemData.servicio} (Copia)`;
+      
+      const { data: newParentData, error: parentError } = await supabase
+        .from('event_items')
+        .insert(itemData)
+        .select()
+        .single();
+        
+      if (parentError) throw parentError;
+      
+      let newItems = [newParentData as AiSuggestion];
+
+      if (isParent) {
+        const childrenToDuplicate = editableSuggestions.filter(s => s.parent_id === id);
+        if (childrenToDuplicate.length > 0) {
+          const childrenData = childrenToDuplicate.map(child => {
+            const { id: _childId, created_at: _childCreatedAt, ...childData } = child as any;
+            childData.parent_id = newParentData.id;
+            return childData;
+          });
+          
+          const { data: newChildrenData, error: childrenError } = await supabase
+            .from('event_items')
+            .insert(childrenData)
+            .select();
+            
+          if (childrenError) throw childrenError;
+          newItems = [...newItems, ...(newChildrenData as AiSuggestion[])];
+        }
+      }
+      
+      setEditableSuggestions(prev => [...prev, ...newItems]);
+      if (onDraftChanged) onDraftChanged();
+      
+    } catch (e) {
+      console.error('Error duplicando:', e);
+      alert('Error al duplicar el ítem.');
+    }
+  };
+
+  const handleDropItem = async (draggedId: string, targetParentId: string) => {
+    if (draggedId === targetParentId) return;
+    
+    const draggedItem = editableSuggestions.find(s => s.id === draggedId);
+    const targetParent = editableSuggestions.find(s => s.id === targetParentId);
+    
+    if (!draggedItem || !targetParent) return;
+    if (draggedItem.tipo_evento === 'Consolidado') {
+      alert("No se pueden arrastrar ítems consolidados dentro de otros.");
+      return;
+    }
+    
+    const oldParentId = draggedItem.parent_id;
+    if (oldParentId === targetParentId) return; 
+    
+    try {
+      const updatedItem = { ...draggedItem, parent_id: targetParentId };
+      const { error } = await supabase
+        .from('event_items')
+        .update({ parent_id: targetParentId })
+        .eq('id', draggedId);
+        
+      if (error) throw error;
+      
+      let newSuggestions = editableSuggestions.map(item => item.id === draggedId ? updatedItem : item);
+      
+      const targetSiblings = newSuggestions.filter(s => s.parent_id === targetParentId);
+      const newTargetCost = targetSiblings.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
+      const targetFin = calculateFinancials(newTargetCost, targetParent.ganancia, targetParent.tipo_doc_costo || 'factura', targetParent.iva_incluido ?? true, targetParent.es_insumo ?? false);
+      const updatedTargetParent = {
+        ...targetParent,
+        costo: newTargetCost,
+        valor_neto: targetFin.valorNeto,
+        iva: targetFin.ivaDebito,
+        valor_total: targetFin.valorTotal,
+        margen: targetFin.margen
+      };
+      
+      let updatedOldParent: AiSuggestion | null = null;
+      if (oldParentId) {
+        const oldParent = newSuggestions.find(s => s.id === oldParentId);
+        if (oldParent) {
+          const oldSiblings = newSuggestions.filter(s => s.parent_id === oldParentId);
+          const newOldCost = oldSiblings.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
+          const oldFin = calculateFinancials(newOldCost, oldParent.ganancia, oldParent.tipo_doc_costo || 'factura', oldParent.iva_incluido ?? true, oldParent.es_insumo ?? false);
+          updatedOldParent = {
+            ...oldParent,
+            costo: newOldCost,
+            valor_neto: oldFin.valorNeto,
+            iva: oldFin.ivaDebito,
+            valor_total: oldFin.valorTotal,
+            margen: oldFin.margen
+          };
+        }
+      }
+      
+      newSuggestions = newSuggestions.map(item => {
+        if (item.id === targetParentId) return updatedTargetParent as AiSuggestion;
+        if (oldParentId && item.id === oldParentId) return updatedOldParent as AiSuggestion;
+        return item;
+      });
+      
+      setEditableSuggestions(newSuggestions);
+      
+      await updateSupabase(updatedTargetParent as AiSuggestion);
+      if (updatedOldParent) await updateSupabase(updatedOldParent as AiSuggestion);
+      
+      if (onDraftChanged) onDraftChanged();
+      
+    } catch (e) {
+      console.error("Error al mover ítem", e);
+      alert("Error al agrupar el ítem.");
+    }
+  };
+
   const handleRemove = async (id: string) => {
     try {
       const childrenIds = editableSuggestions.filter(s => s.parent_id === id).map(s => s.id);
@@ -403,7 +526,33 @@ export function AiSuggestionsGrid({
     const isExpanded = expandedParents.includes(item.id!);
 
     return (
-      <TableRow key={item.id} className={`hover:bg-muted/30 transition-colors ${isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''}`}>
+      <TableRow 
+          key={item.id} 
+          className={`hover:bg-muted/30 transition-colors ${isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''} ${dragOverParentId === item.id ? 'border-2 border-blue-500 bg-blue-50/50' : ''}`}
+          draggable={true}
+          onDragStart={(e) => {
+            setDraggedItemId(item.id!);
+            e.dataTransfer.effectAllowed = "move";
+          }}
+          onDragOver={(e) => {
+            if (item.tipo_evento === 'Consolidado' && draggedItemId !== item.id) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              setDragOverParentId(item.id!);
+            }
+          }}
+          onDragLeave={() => {
+            if (dragOverParentId === item.id) setDragOverParentId(null);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOverParentId(null);
+            if (item.tipo_evento === 'Consolidado' && draggedItemId) {
+              handleDropItem(draggedItemId, item.id!);
+            }
+            setDraggedItemId(null);
+          }}
+        >
         {!isChild ? (
           <TableCell className="p-2 text-center w-[40px]">
              <input 
