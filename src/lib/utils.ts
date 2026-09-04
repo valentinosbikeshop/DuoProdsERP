@@ -18,20 +18,32 @@ export function formatPercentage(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
-export function calculateFinancials(costo: number, ganancia: number) {
-  const valorNeto = costo + ganancia;
+export function calculateFinancials(
+  costo: number, 
+  ganancia: number, 
+  tipoDoc: 'factura' | 'boleta' = 'factura'
+) {
+  // Con factura, el costo ingresado por el usuario incluye IVA, por lo que se extrae el IVA de la compra (neto = costo / 1.19)
+  // Con boleta, no se desglosa IVA de compra y se recarga el 19% al total final
+  const costoNeto = tipoDoc === 'boleta' ? costo : Math.round(costo / 1.19);
+  const valorNeto = costoNeto + ganancia;
   const iva = Math.round(valorNeto * 0.19);
   const valorTotal = valorNeto + iva;
-  const margen = costo > 0 ? (ganancia / costo) * 100 : 0;
-  return { valorNeto, iva, valorTotal, margen: Math.round(margen * 10) / 10 };
+  const margen = costoNeto > 0 ? (ganancia / costoNeto) * 100 : 0;
+  return { valorNeto, iva, valorTotal, margen: Math.round(margen * 10) / 10, costoNeto };
 }
 
-export function calculateGananciaFromTotal(costo: number, valorTotal: number) {
+export function calculateGananciaFromTotal(
+  costo: number, 
+  valorTotal: number, 
+  tipoDoc: 'factura' | 'boleta' = 'factura'
+) {
   const valorNeto = Math.round(valorTotal / 1.19);
-  const ganancia = valorNeto - costo;
+  const costoNeto = tipoDoc === 'boleta' ? costo : Math.round(costo / 1.19);
+  const ganancia = valorNeto - costoNeto;
   const iva = valorTotal - valorNeto;
-  const margen = costo > 0 ? (ganancia / costo) * 100 : 0;
-  return { ganancia, valorNeto, iva, margen: Math.round(margen * 10) / 10 };
+  const margen = costoNeto > 0 ? (ganancia / costoNeto) * 100 : 0;
+  return { ganancia, valorNeto, iva, margen: Math.round(margen * 10) / 10, costoNeto };
 }
 
 export function getMonthName(month: number): string {

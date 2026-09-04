@@ -70,15 +70,19 @@ export default function ReportPage({ params }: { params: { id: string } }) {
 
   items.forEach(item => {
     const qty = item.cantidad || 1;
-    totalCostos += (item.costo || 0) * qty;
+    const rawCostoTotal = (item.costo || 0) * qty;
     totalGanancia += (item.ganancia || 0) * qty;
     
-    // IVA Débito (Ventas)
+    // IVA Débito (Ventas al cliente)
     ivaDebito += (item.iva || 0) * qty;
     
-    // IVA Crédito (Costos con Factura)
+    // Costos e IVA Crédito según tipo de documento
     if (item.tipo_doc_costo === 'factura') {
-      ivaCredito += (item.costo || 0) * 0.19 * qty;
+      const netCosto = Math.round((item.costo || 0) / 1.19) * qty;
+      totalCostos += netCosto;
+      ivaCredito += (rawCostoTotal - netCosto);
+    } else {
+      totalCostos += rawCostoTotal;
     }
     
     totalFacturado += (item.valor_total || 0) * qty;

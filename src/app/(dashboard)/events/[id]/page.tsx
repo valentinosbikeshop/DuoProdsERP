@@ -127,19 +127,17 @@ export default function EventDetailPage() {
       if (data.suggestions && data.suggestions.length > 0) {
         const newDrafts = data.suggestions.map((s: any) => {
           const tipoDoc = s.tipo_doc_costo || 'factura';
-          const isFactura = tipoDoc === 'factura';
-          const baseCosto = s.costo || 0;
-          // Con factura, se aplica automáticamente la opción de IVA incluido (desglose neto = costo / 1.19)
-          const netCosto = isFactura && baseCosto > 0 ? Math.round(baseCosto / 1.19) : baseCosto;
+          const rawCosto = s.costo || 0;
           const ganancia = s.ganancia || 0;
-          const financials = calculateFinancials(netCosto, ganancia);
+          // Se calcula usando el tipo de documento: en factura se desglosa el IVA de la compra, en boleta se recarga al total
+          const financials = calculateFinancials(rawCosto, ganancia, tipoDoc);
           return {
             event_id: id,
             servicio: s.servicio,
             detalle: s.detalle,
             tipo_evento: s.tipo_evento || 'AI',
             cantidad: s.cantidad || 1,
-            costo: netCosto,
+            costo: rawCosto,
             ganancia: ganancia,
             valor_neto: financials.valorNeto,
             iva: financials.iva,
@@ -185,19 +183,16 @@ export default function EventDetailPage() {
       if (data.suggestions && data.suggestions.length > 0) {
         const newDrafts = data.suggestions.map((s: any) => {
           const tipoDoc = s.tipo_doc_costo || 'factura';
-          const isFactura = tipoDoc === 'factura';
-          const baseCosto = s.costo || 0;
-          // Con factura, se aplica automáticamente la opción de IVA incluido (desglose neto = costo / 1.19)
-          const netCosto = isFactura && baseCosto > 0 ? Math.round(baseCosto / 1.19) : baseCosto;
+          const rawCosto = s.costo || 0;
           const ganancia = s.ganancia || 0;
-          const financials = calculateFinancials(netCosto, ganancia);
+          const financials = calculateFinancials(rawCosto, ganancia, tipoDoc);
           return {
             event_id: id,
             servicio: s.servicio,
             detalle: s.detalle,
             tipo_evento: s.tipo_evento || 'AI',
             cantidad: s.cantidad || 1,
-            costo: netCosto,
+            costo: rawCosto,
             ganancia: ganancia,
             valor_neto: financials.valorNeto,
             iva: financials.iva,

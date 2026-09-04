@@ -111,7 +111,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
 
     const selectedItems = localItems.filter(s => selectedIds.includes(s.id!));
     const totalCost = selectedItems.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
-    const financials = calculateFinancials(totalCost, 0);
+    const financials = calculateFinancials(totalCost, 0, 'factura');
 
     const parentItem = {
       event_id: eventId,
@@ -141,7 +141,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
 
       // 2. Update children to set parent_id, and reset their ganancia to 0 to prevent double margin if we want
       for (const child of selectedItems) {
-        const childFinancials = calculateFinancials(child.costo, 0); 
+        const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura'); 
         await (supabase.from('event_items') as any).update({ 
           parent_id: insertedParent.id,
           ganancia: 0,
