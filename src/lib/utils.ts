@@ -21,29 +21,57 @@ export function formatPercentage(value: number): string {
 export function calculateFinancials(
   costo: number, 
   ganancia: number, 
-  tipoDoc: 'factura' | 'boleta' = 'factura'
+  tipoDoc: 'factura' | 'boleta' = 'factura',
+  aplicaIvaVenta: boolean = true
 ) {
-  // Con factura, el costo ingresado por el usuario incluye IVA, por lo que se extrae el IVA de la compra (neto = costo / 1.19)
-  // Con boleta, no se desglosa IVA de compra y se recarga el 19% al total final
+  // IVA Crédito (Egresos)
   const costoNeto = tipoDoc === 'boleta' ? costo : Math.round(costo / 1.19);
+  const ivaCredito = costo - costoNeto;
+
+  // IVA Débito (Ingresos)
   const valorNeto = costoNeto + ganancia;
-  const iva = Math.round(valorNeto * 0.19);
-  const valorTotal = valorNeto + iva;
+  const ivaDebito = aplicaIvaVenta ? Math.round(valorNeto * 0.19) : 0;
+  
+  const valorTotal = valorNeto + ivaDebito;
   const margen = costoNeto > 0 ? (ganancia / costoNeto) * 100 : 0;
-  return { valorNeto, iva, valorTotal, margen: Math.round(margen * 10) / 10, costoNeto };
+  
+  return { 
+    costoNeto, 
+    ivaCredito, 
+    valorNeto, 
+    iva: ivaDebito, 
+    ivaDebito,
+    valorTotal, 
+    margen: Math.round(margen * 10) / 10 
+  };
 }
 
 export function calculateGananciaFromTotal(
   costo: number, 
   valorTotal: number, 
-  tipoDoc: 'factura' | 'boleta' = 'factura'
+  tipoDoc: 'factura' | 'boleta' = 'factura',
+  aplicaIvaVenta: boolean = true
 ) {
-  const valorNeto = Math.round(valorTotal / 1.19);
+  // IVA Crédito (Egresos)
   const costoNeto = tipoDoc === 'boleta' ? costo : Math.round(costo / 1.19);
+  const ivaCredito = costo - costoNeto;
+
+  // IVA Débito (Ingresos)
+  const valorNeto = aplicaIvaVenta ? Math.round(valorTotal / 1.19) : valorTotal;
+  const ivaDebito = valorTotal - valorNeto;
+  
   const ganancia = valorNeto - costoNeto;
-  const iva = valorTotal - valorNeto;
   const margen = costoNeto > 0 ? (ganancia / costoNeto) * 100 : 0;
-  return { ganancia, valorNeto, iva, margen: Math.round(margen * 10) / 10, costoNeto };
+  
+  return { 
+    costoNeto,
+    ivaCredito,
+    ganancia, 
+    valorNeto, 
+    iva: ivaDebito, 
+    ivaDebito,
+    margen: Math.round(margen * 10) / 10 
+  };
 }
 
 export function getMonthName(month: number): string {

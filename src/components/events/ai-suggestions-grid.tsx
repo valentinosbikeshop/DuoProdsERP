@@ -71,6 +71,7 @@ export function AiSuggestionsGrid({
         margen: updatedItem.margen,
         tipo_doc_costo: updatedItem.tipo_doc_costo,
         parent_id: updatedItem.parent_id,
+        iva_incluido: updatedItem.iva_incluido ?? true,
       }).eq('id', updatedItem.id);
     } catch (e) {
       console.error("Error updating item", e);
@@ -94,18 +95,19 @@ export function AiSuggestionsGrid({
     }
 
     const currentTipoDoc = (updatedItem.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
+    const currentIvaIncluido = field === 'iva_incluido' ? newValue : (updatedItem.iva_incluido ?? true);
 
     // Recalculate financials
     if (field === 'valor_total') {
-      const financials = calculateGananciaFromTotal(updatedItem.costo, updatedItem.valor_total, currentTipoDoc);
+      const financials = calculateGananciaFromTotal(updatedItem.costo, updatedItem.valor_total, currentTipoDoc, currentIvaIncluido);
       updatedItem.ganancia = financials.ganancia;
       updatedItem.valor_neto = financials.valorNeto;
-      updatedItem.iva = financials.iva;
+      updatedItem.iva = financials.ivaDebito;
       updatedItem.margen = financials.margen;
-    } else if (['costo', 'ganancia', 'sin_ganancia', 'tipo_doc_costo'].includes(field)) {
-      const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia, currentTipoDoc);
+    } else if (['costo', 'ganancia', 'sin_ganancia', 'tipo_doc_costo', 'iva_incluido'].includes(field)) {
+      const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia, currentTipoDoc, currentIvaIncluido);
       updatedItem.valor_neto = financials.valorNeto;
-      updatedItem.iva = financials.iva;
+      updatedItem.iva = financials.ivaDebito;
       updatedItem.valor_total = financials.valorTotal;
       updatedItem.margen = financials.margen;
     }
@@ -123,12 +125,13 @@ export function AiSuggestionsGrid({
         newSuggestions = newSuggestions.map(item => {
           if (item.id === updatedItem.parent_id) {
             const parentTipo = (item.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
-            const parentFinancials = calculateFinancials(newParentCost, item.ganancia, parentTipo);
+            const parentIvaIncluido = item.iva_incluido ?? true;
+            const parentFinancials = calculateFinancials(newParentCost, item.ganancia, parentTipo, parentIvaIncluido);
             const newParent = {
               ...item,
               costo: newParentCost,
               valor_neto: parentFinancials.valorNeto,
-              iva: parentFinancials.iva,
+              iva: parentFinancials.ivaDebito,
               valor_total: parentFinancials.valorTotal,
               margen: parentFinancials.margen
             };
@@ -162,7 +165,8 @@ export function AiSuggestionsGrid({
     if (!manualItem.servicio.trim()) return;
 
     const tipoDoc = (manualItem.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
-    const financials = calculateFinancials(manualItem.costo, manualItem.ganancia, tipoDoc);
+    const aplicaIva = manualItem.iva_incluido ?? true;
+    const financials = calculateFinancials(manualItem.costo, manualItem.ganancia, tipoDoc, aplicaIva);
 
     const newItem = {
       event_id: eventId,
@@ -173,10 +177,11 @@ export function AiSuggestionsGrid({
       costo: manualItem.costo,
       ganancia: manualItem.ganancia,
       valor_neto: financials.valorNeto,
-      iva: financials.iva,
+      iva: financials.ivaDebito,
       valor_total: financials.valorTotal,
       margen: financials.margen,
       tipo_doc_costo: tipoDoc,
+      iva_incluido: aplicaIva,
       approved: false,
     };
 
@@ -272,7 +277,7 @@ export function AiSuggestionsGrid({
 
     const selectedItems = editableSuggestions.filter(s => selectedIds.includes(s.id!));
     const totalCost = selectedItems.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
-    const financials = calculateFinancials(totalCost, 0, 'factura');
+    const financials = calculateFinancials(totalCost, 0, 'factura', true);
 
     const parentItem = {
       event_id: eventId,
@@ -283,10 +288,11 @@ export function AiSuggestionsGrid({
       costo: totalCost,
       ganancia: 0,
       valor_neto: financials.valorNeto,
-      iva: financials.iva,
+      iva: financials.ivaDebito,
       valor_total: financials.valorTotal,
       margen: financials.margen,
       tipo_doc_costo: 'factura',
+      iva_incluido: true,
       approved: false,
       parent_id: null
     };
@@ -302,12 +308,13 @@ export function AiSuggestionsGrid({
 
       // 2. Update children to set parent_id, and reset their ganancia to 0 to prevent double margin if we want
       for (const child of selectedItems) {
-        const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura'); 
+        const childIvaIncluido = child.iva_incluido ?? true;
+        const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura', childIvaIncluido); 
         await (supabase.from('event_items') as any).update({ 
           parent_id: insertedParent.id,
           ganancia: 0,
           valor_neto: childFinancials.valorNeto,
-          iva: childFinancials.iva,
+          iva: childFinancials.ivaDebito,
           valor_total: childFinancials.valorTotal,
           margen: childFinancials.margen
         }).eq('id', child.id);
@@ -453,6 +460,12 @@ export function AiSuggestionsGrid({
             </div>
           </div>
         </TableCell>
+        <TableCell className="p-2 align-top text-right text-xs font-medium text-red-900/70 bg-red-50/30">
+          {(() => {
+             const fin = calculateFinancials(item.costo, item.ganancia, item.tipo_doc_costo || 'factura', item.iva_incluido ?? true);
+             return formatCLP(fin.ivaCredito);
+          })()}
+        </TableCell>
         <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(item.costo * item.cantidad)}</TableCell>
 
         {/* INGRESOS */}
@@ -476,6 +489,20 @@ export function AiSuggestionsGrid({
           </div>
         </TableCell>
         <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.valor_neto)}</TableCell>
+        <TableCell className="p-2 align-top text-center bg-emerald-50/30">
+          <button
+             type="button"
+             onClick={() => handleInputChange(item.id!, 'iva_incluido', !(item.iva_incluido ?? true), true)}
+             className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider text-center transition-colors ${
+               (item.iva_incluido ?? true)
+                 ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
+                 : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
+             }`}
+             title="¿Este ítem incluye recargo de IVA Débito al cliente?"
+           >
+             {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
+           </button>
+        </TableCell>
         <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.iva)}</TableCell>
         <TableCell className="p-2 align-top font-semibold bg-emerald-50/30">
           <Input
@@ -584,8 +611,8 @@ export function AiSuggestionsGrid({
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
               <TableHead colSpan={4} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
-              <TableHead colSpan={2} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
-              <TableHead colSpan={5} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
+              <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
+              <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
               <TableHead colSpan={2} className="text-center font-bold text-muted-foreground">RESUMEN</TableHead>
             </TableRow>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -595,11 +622,13 @@ export function AiSuggestionsGrid({
               <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">IVA Crédito</TableHead>
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-red-50/20 border-r text-red-900/80">Total Costos</TableHead>
               
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">Ganancia Unit.</TableHead>
               <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Neto</TableHead>
-              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">IVA (19%)</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80 text-center">Facturable?</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">IVA Débito</TableHead>
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Total Unit.</TableHead>
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-emerald-50/20 border-r text-emerald-900/80">Total Venta</TableHead>
               
@@ -690,6 +719,12 @@ export function AiSuggestionsGrid({
                   </div>
                 </div>
               </TableCell>
+              <TableCell className="p-2 align-top text-right text-xs font-medium text-red-900/70 bg-red-50/30">
+                {(() => {
+                  const fin = calculateFinancials(manualItem.costo, manualItem.ganancia, manualItem.tipo_doc_costo || 'factura', manualItem.iva_incluido ?? true);
+                  return formatCLP(fin.ivaCredito);
+                })()}
+              </TableCell>
               <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(manualItem.costo * manualItem.cantidad)}</TableCell>
 
               {/* INGRESOS MANUAL */}
@@ -713,6 +748,20 @@ export function AiSuggestionsGrid({
                 </div>
               </TableCell>
               <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.valor_neto)}</TableCell>
+              <TableCell className="p-2 align-top text-center bg-emerald-50/30">
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('manual', 'iva_incluido', !(manualItem.iva_incluido ?? true))}
+                  className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider text-center transition-colors ${
+                    (manualItem.iva_incluido ?? true)
+                      ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
+                      : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
+                  }`}
+                  title="¿Este ítem incluye recargo de IVA Débito al cliente?"
+                >
+                  {(manualItem.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
+                </button>
+              </TableCell>
               <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.iva)}</TableCell>
               <TableCell className="p-2 align-top font-semibold text-emerald-700 bg-emerald-50/30">
                 <Input
@@ -778,9 +827,11 @@ export function AiSuggestionsGrid({
               <TableRow className="bg-muted/50 font-semibold">
                 <TableCell colSpan={4} className="font-bold text-right border-r">Totales en Borrador:</TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
+                <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totals.costo)}</TableCell>
                 <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.ganancia)}</TableCell>
                 <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_neto)}</TableCell>
+                <TableCell className="bg-emerald-50/20"></TableCell>
                 <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.iva)}</TableCell>
                 <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_total)}</TableCell>
                 <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700 text-base">{formatCLP(totals.valor_total)}</TableCell>

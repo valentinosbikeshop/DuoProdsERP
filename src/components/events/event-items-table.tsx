@@ -259,11 +259,26 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
             </span>
           </div>
         </TableCell>
+        <TableCell className={`p-2 text-right text-xs font-medium bg-red-50/30 ${isChild ? 'text-red-900/50' : 'text-red-900/70'}`}>
+          {(() => {
+             const fin = calculateFinancials(item.costo, item.ganancia, item.tipo_doc_costo || 'factura', item.iva_incluido ?? true);
+             return formatCLP(fin.ivaCredito);
+          })()}
+        </TableCell>
         <TableCell className={`p-2 text-right font-bold bg-red-50/30 border-r ${isChild ? 'text-red-700/60' : 'text-red-700'}`}>{formatCLP(item.costo * item.cantidad)}</TableCell>
 
         {/* INGRESOS */}
         <TableCell className={`p-2 text-sm bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80 font-medium'}`}>{formatCLP(item.ganancia)}</TableCell>
         <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.valor_neto)}</TableCell>
+        <TableCell className="p-2 align-middle text-center bg-emerald-50/30">
+           <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-center border ${
+               (item.iva_incluido ?? true)
+                 ? 'bg-blue-100 text-blue-800 border-blue-200'
+                 : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+             }`}>
+             {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
+           </span>
+        </TableCell>
         <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva)}</TableCell>
         <TableCell className={`p-2 text-sm font-semibold bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900'}`}>{formatCLP(item.valor_total)}</TableCell>
         <TableCell className={`p-2 text-right font-bold bg-emerald-50/30 border-r ${isChild ? 'text-emerald-700/60' : 'text-emerald-700'}`}>{formatCLP(item.valor_total * item.cantidad)}</TableCell>
@@ -339,8 +354,8 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
               <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
-              <TableHead colSpan={2} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
-              <TableHead colSpan={5} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
+              <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
+              <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
               <TableHead colSpan={isCompleted ? 2 : 3} className="text-center font-bold text-muted-foreground">RESUMEN Y GESTIÓN</TableHead>
             </TableRow>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -351,11 +366,13 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
               <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">IVA Crédito</TableHead>
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-red-50/20 border-r text-red-900/80">Total Costos</TableHead>
               
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">Ganancia Unit.</TableHead>
               <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Neto</TableHead>
-              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">IVA (19%)</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80 text-center">Facturable?</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">IVA Débito</TableHead>
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Total Unit.</TableHead>
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-emerald-50/20 border-r text-emerald-900/80">Total Venta</TableHead>
               
@@ -381,10 +398,12 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
             <TableRow className="bg-muted/50 font-semibold">
               <TableCell colSpan={5} className="font-bold text-right border-r">Totales Globales:</TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
+              <TableCell className="bg-red-50/20"></TableCell>
               <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totals.costo)}</TableCell>
               
               <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.ganancia)}</TableCell>
               <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_neto)}</TableCell>
+              <TableCell className="bg-emerald-50/20"></TableCell>
               <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.iva)}</TableCell>
               <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_total)}</TableCell>
               <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700 text-lg">{formatCLP(totals.valor_total)}</TableCell>
