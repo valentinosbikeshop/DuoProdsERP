@@ -14,6 +14,8 @@ export type AiSuggestion = {
   margen: number;
   tipo_doc_costo?: 'factura' | 'boleta';
   sin_ganancia?: boolean;
+  iva_incluido?: boolean;
+  costo_desglosado?: boolean;
 };
 
 export type FinancialSummary = {

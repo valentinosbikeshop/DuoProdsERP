@@ -14,7 +14,7 @@ import { EventItemsTable } from '@/components/events/event-items-table';
 import { FloatingFinancialAdvisor } from '@/components/events/floating-financial-advisor';
 import { EditEventDialog } from '@/components/events/edit-event-dialog';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
-import { formatDateCL } from '@/lib/utils';
+import { formatDateCL, calculateFinancials } from '@/lib/utils';
 import { 
   Sparkles, 
   FileText, 
@@ -125,21 +125,30 @@ export default function EventDetailPage() {
 
       const data = await response.json();
       if (data.suggestions && data.suggestions.length > 0) {
-        const newDrafts = data.suggestions.map((s: any) => ({
-          event_id: id,
-          servicio: s.servicio,
-          detalle: s.detalle,
-          tipo_evento: s.tipo_evento || 'AI',
-          cantidad: s.cantidad || 1,
-          costo: s.costo || 0,
-          ganancia: s.ganancia || 0,
-          valor_neto: s.valor_neto || 0,
-          iva: s.iva || 0,
-          valor_total: s.valor_total || 0,
-          margen: s.margen || 0,
-          tipo_doc_costo: s.tipo_doc_costo || 'factura',
-          approved: false,
-        }));
+        const newDrafts = data.suggestions.map((s: any) => {
+          const tipoDoc = s.tipo_doc_costo || 'factura';
+          const isFactura = tipoDoc === 'factura';
+          const baseCosto = s.costo || 0;
+          // Con factura, se aplica automáticamente la opción de IVA incluido (desglose neto = costo / 1.19)
+          const netCosto = isFactura && baseCosto > 0 ? Math.round(baseCosto / 1.19) : baseCosto;
+          const ganancia = s.ganancia || 0;
+          const financials = calculateFinancials(netCosto, ganancia);
+          return {
+            event_id: id,
+            servicio: s.servicio,
+            detalle: s.detalle,
+            tipo_evento: s.tipo_evento || 'AI',
+            cantidad: s.cantidad || 1,
+            costo: netCosto,
+            ganancia: ganancia,
+            valor_neto: financials.valorNeto,
+            iva: financials.iva,
+            valor_total: financials.valorTotal,
+            margen: financials.margen,
+            tipo_doc_costo: tipoDoc,
+            approved: false,
+          };
+        });
         
         await supabase.from('event_items').insert(newDrafts);
       }
@@ -174,21 +183,30 @@ export default function EventDetailPage() {
 
       const data = await response.json();
       if (data.suggestions && data.suggestions.length > 0) {
-        const newDrafts = data.suggestions.map((s: any) => ({
-          event_id: id,
-          servicio: s.servicio,
-          detalle: s.detalle,
-          tipo_evento: s.tipo_evento || 'AI',
-          cantidad: s.cantidad || 1,
-          costo: s.costo || 0,
-          ganancia: s.ganancia || 0,
-          valor_neto: s.valor_neto || 0,
-          iva: s.iva || 0,
-          valor_total: s.valor_total || 0,
-          margen: s.margen || 0,
-          tipo_doc_costo: s.tipo_doc_costo || 'factura',
-          approved: false,
-        }));
+        const newDrafts = data.suggestions.map((s: any) => {
+          const tipoDoc = s.tipo_doc_costo || 'factura';
+          const isFactura = tipoDoc === 'factura';
+          const baseCosto = s.costo || 0;
+          // Con factura, se aplica automáticamente la opción de IVA incluido (desglose neto = costo / 1.19)
+          const netCosto = isFactura && baseCosto > 0 ? Math.round(baseCosto / 1.19) : baseCosto;
+          const ganancia = s.ganancia || 0;
+          const financials = calculateFinancials(netCosto, ganancia);
+          return {
+            event_id: id,
+            servicio: s.servicio,
+            detalle: s.detalle,
+            tipo_evento: s.tipo_evento || 'AI',
+            cantidad: s.cantidad || 1,
+            costo: netCosto,
+            ganancia: ganancia,
+            valor_neto: financials.valorNeto,
+            iva: financials.iva,
+            valor_total: financials.valorTotal,
+            margen: financials.margen,
+            tipo_doc_costo: tipoDoc,
+            approved: false,
+          };
+        });
         
         await supabase.from('event_items').insert(newDrafts);
         setCustomPrompt(''); // Clear prompt after adding to draft

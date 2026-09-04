@@ -37,6 +37,8 @@ const emptySuggestion: AiSuggestion = {
   margen: 0,
   tipo_doc_costo: 'factura',
   sin_ganancia: false,
+  iva_incluido: true,
+  costo_desglosado: false,
 };
 
 export function AiSuggestionsGrid({
@@ -53,7 +55,11 @@ export function AiSuggestionsGrid({
   const supabase = createClient();
   
   useEffect(() => {
-    setEditableSuggestions(draftItems);
+    setEditableSuggestions(draftItems.map(item => ({
+      ...item,
+      iva_incluido: (item as any).iva_incluido !== undefined ? (item as any).iva_incluido : (item.tipo_doc_costo || 'factura') === 'factura',
+      costo_desglosado: true,
+    })));
   }, [draftItems]);
 
   const updateSupabase = async (updatedItem: EventItem) => {
@@ -93,6 +99,28 @@ export function AiSuggestionsGrid({
       updatedItem.ganancia = 0;
     }
 
+    if (field === 'tipo_doc_costo') {
+      const isSwitchingToFactura = value === 'factura';
+      if (isSwitchingToFactura) {
+        // Al pasar a factura, automáticamente se aplica la opción de IVA incluido (desglose neto = costo / 1.19)
+        updatedItem.iva_incluido = true;
+        updatedItem.costo_desglosado = true;
+        if (updatedItem.costo > 0) {
+          updatedItem.costo = Math.round(updatedItem.costo / 1.19);
+        }
+      } else {
+        // Al pasar a boleta, no hay crédito fiscal de IVA, se desactiva IVA incluido y vuelve a costo bruto
+        const wasIvaIncluido = (targetItem as any).iva_incluido !== false;
+        updatedItem.iva_incluido = false;
+        updatedItem.costo_desglosado = false;
+        if (wasIvaIncluido && updatedItem.costo > 0) {
+          updatedItem.costo = Math.round(updatedItem.costo * 1.19);
+        }
+      }
+    } else if (field === 'costo') {
+      updatedItem.costo_desglosado = false;
+    }
+
     // Recalculate financials
     if (field === 'valor_total') {
       const financials = calculateGananciaFromTotal(updatedItem.costo, updatedItem.valor_total);
@@ -100,7 +128,7 @@ export function AiSuggestionsGrid({
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.iva;
       updatedItem.margen = financials.margen;
-    } else if (['costo', 'ganancia', 'sin_ganancia'].includes(field)) {
+    } else if (['costo', 'ganancia', 'sin_ganancia', 'tipo_doc_costo'].includes(field)) {
       const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia);
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.iva;
@@ -143,6 +171,56 @@ export function AiSuggestionsGrid({
     }
   };
 
+  const toggleIvaIncluido = (id: string) => {
+    const isManual = id === 'manual';
+    const targetItem = isManual ? manualItem : editableSuggestions.find(s => s.id === id);
+    if (!targetItem) return;
+
+    const currentIvaIncluido = (targetItem as any).iva_incluido !== false;
+    const isDesglosado = Boolean((targetItem as any).costo_desglosado);
+    
+    let newIvaIncluido = !currentIvaIncluido;
+    let newCosto = targetItem.costo;
+    let newDesglosado = false;
+
+    if (targetItem.costo > 0) {
+      if (currentIvaIncluido && !isDesglosado) {
+        // El usuario escribió un costo bruto nuevo y presiona IVA INCL. para desglosarlo
+        newCosto = Math.round(targetItem.costo / 1.19);
+        newIvaIncluido = true;
+        newDesglosado = true;
+      } else if (newIvaIncluido) {
+        // Se activa IVA incluido -> desglosar dividiendo por 1.19
+        newCosto = Math.round(targetItem.costo / 1.19);
+        newDesglosado = true;
+      } else {
+        // Se desactiva IVA incluido -> revertir multiplicando por 1.19
+        newCosto = Math.round(targetItem.costo * 1.19);
+        newDesglosado = false;
+      }
+    }
+
+    const financials = calculateFinancials(newCosto, targetItem.ganancia);
+    const updatedItem = {
+      ...targetItem,
+      costo: newCosto,
+      valor_neto: financials.valorNeto,
+      iva: financials.iva,
+      valor_total: financials.valorTotal,
+      margen: financials.margen,
+      iva_incluido: newIvaIncluido,
+      costo_desglosado: newDesglosado,
+    } as any;
+
+    if (isManual) {
+      setManualItem(updatedItem as AiSuggestion);
+    } else {
+      setEditableSuggestions(prev => prev.map(item => item.id === id ? updatedItem : item));
+      updateSupabase(updatedItem);
+      if (onDraftChanged) onDraftChanged();
+    }
+  };
+
   const handleBlur = (id: string) => {
     if (id === 'manual') return;
     const item = editableSuggestions.find(s => s.id === id);
@@ -158,18 +236,29 @@ export function AiSuggestionsGrid({
   const handleAddManualToDraft = async () => {
     if (!manualItem.servicio.trim()) return;
 
+    const isFactura = (manualItem.tipo_doc_costo || 'factura') === 'factura';
+    const isIvaIncluido = (manualItem as any).iva_incluido !== false;
+    const isDesglosado = Boolean((manualItem as any).costo_desglosado);
+
+    // Con factura y opción de IVA incluido activa, se desglosa automáticamente si aún no se había desglosado
+    let finalCosto = manualItem.costo;
+    if (isFactura && isIvaIncluido && manualItem.costo > 0 && !isDesglosado) {
+      finalCosto = Math.round(manualItem.costo / 1.19);
+    }
+    const financials = calculateFinancials(finalCosto, manualItem.ganancia);
+
     const newItem = {
       event_id: eventId,
       servicio: manualItem.servicio.trim(),
       detalle: manualItem.detalle.trim(),
       tipo_evento: manualItem.tipo_evento,
       cantidad: manualItem.cantidad,
-      costo: manualItem.costo,
+      costo: finalCosto,
       ganancia: manualItem.ganancia,
-      valor_neto: manualItem.valor_neto,
-      iva: manualItem.iva,
-      valor_total: manualItem.valor_total,
-      margen: manualItem.margen,
+      valor_neto: financials.valorNeto,
+      iva: financials.iva,
+      valor_total: financials.valorTotal,
+      margen: financials.margen,
       tipo_doc_costo: manualItem.tipo_doc_costo || 'factura',
       approved: false,
     };
@@ -418,10 +507,24 @@ export function AiSuggestionsGrid({
               <button
                 type="button"
                 onClick={() => handleInputChange(item.id!, 'tipo_doc_costo', item.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta', true)}
-                className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
+                className={`text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${item.tipo_doc_costo === 'boleta' ? 'w-full bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'flex-1 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
               >
                 {item.tipo_doc_costo || 'factura'}
               </button>
+              {(item.tipo_doc_costo || 'factura') === 'factura' && (
+                <button
+                  type="button"
+                  onClick={() => toggleIvaIncluido(item.id!)}
+                  className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${
+                    (item as any).iva_incluido !== false
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 font-bold'
+                      : 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200'
+                  }`}
+                  title={(item as any).iva_incluido !== false ? "IVA incluido aplicado (desglosado). Clic para cambiar a costo neto (+ IVA)." : "Costo neto sin IVA (+ IVA). Clic para aplicar IVA incluido (desglosar)."}
+                >
+                  {(item as any).iva_incluido !== false ? 'IVA INCL.' : '+ IVA'}
+                </button>
+              )}
             </div>
           </div>
         </TableCell>
@@ -618,10 +721,24 @@ export function AiSuggestionsGrid({
                     <button
                       type="button"
                       onClick={() => handleInputChange('manual', 'tipo_doc_costo', manualItem.tipo_doc_costo === 'boleta' ? 'factura' : 'boleta')}
-                      className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${manualItem.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
+                      className={`text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${manualItem.tipo_doc_costo === 'boleta' ? 'w-full bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200' : 'flex-1 bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'}`}
                     >
                       {manualItem.tipo_doc_costo || 'factura'}
                     </button>
+                    {(manualItem.tipo_doc_costo || 'factura') === 'factura' && (
+                      <button
+                        type="button"
+                        onClick={() => toggleIvaIncluido('manual')}
+                        className={`flex-1 text-[9px] px-1 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center transition-colors ${
+                          (manualItem as any).iva_incluido !== false
+                            ? 'bg-emerald-100 text-emerald-700 border-emerald-300 hover:bg-emerald-200 font-bold'
+                            : 'bg-zinc-100 text-zinc-600 border-zinc-200 hover:bg-zinc-200'
+                        }`}
+                        title={(manualItem as any).iva_incluido !== false ? "IVA incluido aplicado (desglosado). Clic para cambiar a costo neto (+ IVA)." : "Costo neto sin IVA (+ IVA). Clic para aplicar IVA incluido (desglosar)."}
+                      >
+                        {(manualItem as any).iva_incluido !== false ? 'IVA INCL.' : '+ IVA'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </TableCell>
