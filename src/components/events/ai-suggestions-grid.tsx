@@ -91,8 +91,12 @@ export function AiSuggestionsGrid({
 
     const updatedItem = { ...targetItem, [field]: newValue } as any;
     
-    if (field === 'sin_ganancia' && newValue === true) {
-      updatedItem.ganancia = 0;
+    if (field === 'sin_ganancia') {
+      if (newValue === true) {
+        updatedItem.ganancia = 0;
+      } else if (updatedItem.ganancia === 0 && updatedItem.costo > 0) {
+        updatedItem.ganancia = Math.round(updatedItem.costo * 0.2);
+      }
     }
 
     const currentTipoDoc = (updatedItem.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
@@ -160,8 +164,14 @@ export function AiSuggestionsGrid({
     }
   };
 
-  const handleBlur = (id: string) => {
-    if (id === 'manual') return;
+  const handleBlur = (id: string, e?: React.FocusEvent<HTMLInputElement>) => {
+    if (e && e.target.type === 'number') {
+      e.target.value = Number(e.target.value).toString();
+    }
+    if (id === 'manual') {
+      setManualItem(prev => ({ ...prev }));
+      return;
+    }
     const item = editableSuggestions.find(s => s.id === id);
     if (item) {
       updateSupabase(item);
@@ -420,7 +430,7 @@ export function AiSuggestionsGrid({
             <Input
               value={item.servicio}
               onChange={(e) => handleInputChange(item.id!, 'servicio', e.target.value)}
-              onBlur={() => handleBlur(item.id!)}
+              onBlur={(e) => handleBlur(item.id!, e)}
               className={`h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all ${!isChild ? 'font-semibold' : 'font-medium text-muted-foreground'}`}
               readOnly={hasChildren && !isExpanded} 
             />
@@ -430,7 +440,7 @@ export function AiSuggestionsGrid({
           <Input
             value={item.detalle || ''}
             onChange={(e) => handleInputChange(item.id!, 'detalle', e.target.value)}
-            onBlur={() => handleBlur(item.id!)}
+            onBlur={(e) => handleBlur(item.id!, e)}
             className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
           />
         </TableCell>
@@ -454,7 +464,7 @@ export function AiSuggestionsGrid({
             type="number"
             value={item.cantidad}
             onChange={(e) => handleInputChange(item.id!, 'cantidad', e.target.value)}
-            onBlur={() => handleBlur(item.id!)}
+            onBlur={(e) => handleBlur(item.id!, e)}
             className="h-8 text-sm w-full text-center px-1"
             min="1"
             disabled={hasChildren} 
@@ -468,7 +478,7 @@ export function AiSuggestionsGrid({
               type="number"
               value={item.costo}
               onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
-              onBlur={() => handleBlur(item.id!)}
+              onBlur={(e) => handleBlur(item.id!, e)}
               className="h-8 text-sm w-full px-2"
               disabled={hasChildren} 
             />
@@ -526,9 +536,9 @@ export function AiSuggestionsGrid({
                   type="number"
                   value={item.ganancia}
                   onChange={(e) => handleInputChange(item.id!, 'ganancia', e.target.value)}
-                  onBlur={() => handleBlur(item.id!)}
+                  onBlur={(e) => handleBlur(item.id!, e)}
                   className="h-8 text-sm w-full px-2"
-                  disabled={item.ganancia === 0 && item.valor_total > 0} 
+                   
                 />
                 <button
                   type="button"
@@ -560,7 +570,7 @@ export function AiSuggestionsGrid({
                 type="number"
                 value={item.valor_total || ''}
                 onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
-                onBlur={() => handleBlur(item.id!)}
+                onBlur={(e) => handleBlur(item.id!, e)}
                 className="h-8 text-sm w-full px-2 font-semibold border-emerald-200 focus:border-emerald-500"
               />
             </TableCell>
@@ -741,6 +751,7 @@ export function AiSuggestionsGrid({
                   type="number"
                   value={manualItem.cantidad || ''}
                   onChange={(e) => handleInputChange('manual', 'cantidad', e.target.value)}
+                  onBlur={(e) => handleBlur('manual', e)}
                   className="h-8 text-sm w-full text-center px-1 bg-background/90"
                   min="1"
                 />
@@ -754,6 +765,7 @@ export function AiSuggestionsGrid({
                     placeholder="0"
                     value={manualItem.costo || ''}
                     onChange={(e) => handleInputChange('manual', 'costo', e.target.value)}
+                    onBlur={(e) => handleBlur('manual', e)}
                     className="h-8 text-sm w-full px-2 bg-background/90"
                   />
                   <div className="flex items-center gap-1 w-full">
@@ -811,6 +823,7 @@ export function AiSuggestionsGrid({
                         placeholder="0"
                         value={manualItem.ganancia || ''}
                         onChange={(e) => handleInputChange('manual', 'ganancia', e.target.value)}
+                        onBlur={(e) => handleBlur('manual', e)}
                         className="h-8 text-sm w-full px-2 bg-background/90"
                         disabled={manualItem.sin_ganancia}
                       />
@@ -845,6 +858,7 @@ export function AiSuggestionsGrid({
                       placeholder="0"
                       value={manualItem.valor_total || ''}
                       onChange={(e) => handleInputChange('manual', 'valor_total', e.target.value)}
+                      onBlur={(e) => handleBlur('manual', e)}
                       className="h-8 text-sm w-full px-2 font-semibold bg-background/90 border-emerald-200 focus:border-emerald-500"
                     />
                   </TableCell>
