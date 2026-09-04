@@ -16,6 +16,7 @@ export type AiSuggestion = {
   sin_ganancia?: boolean;
   iva_incluido?: boolean;
   costo_desglosado?: boolean;
+  es_insumo?: boolean;
 };
 
 export type FinancialSummary = {

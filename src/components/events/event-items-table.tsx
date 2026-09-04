@@ -187,7 +187,10 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
 
   const topLevelItems = localItems.filter(item => !item.parent_id);
 
-  const totals = topLevelItems.reduce(
+  const facturables = topLevelItems.filter(item => !item.es_insumo);
+  const insumos = topLevelItems.filter(item => item.es_insumo);
+
+  const totalesFacturables = facturables.reduce(
     (acc, item) => ({
       costo: acc.costo + (item.costo * item.cantidad),
       ganancia: acc.ganancia + (item.ganancia * item.cantidad),
@@ -197,6 +200,18 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
     }),
     { costo: 0, ganancia: 0, valor_neto: 0, iva: 0, valor_total: 0 }
   );
+
+  const totalesInsumos = insumos.reduce(
+    (acc, item) => ({
+      costo: acc.costo + (item.costo * item.cantidad),
+    }),
+    { costo: 0 }
+  );
+
+  const costoTotalGlobal = totalesFacturables.costo + totalesInsumos.costo;
+  const utilidadNeta = totalesFacturables.ganancia - totalesInsumos.costo; // Assuming ganancia here is basically V.Neto - Costo. Wait, if tipo_doc is boleta, ganancia is total - costo. It matches.
+  // Actually Utility = (Facturable Revenue - Facturable Cost) - Sunk Costs
+  const margenReal = costoTotalGlobal > 0 ? (utilidadNeta / costoTotalGlobal) * 100 : 0;
 
   const renderRow = (item: EventItem, isChild: boolean = false) => {
     const isSelected = selectedIds.includes(item.id!);
@@ -268,20 +283,30 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
         <TableCell className={`p-2 text-right font-bold bg-red-50/30 border-r ${isChild ? 'text-red-700/60' : 'text-red-700'}`}>{formatCLP(item.costo * item.cantidad)}</TableCell>
 
         {/* INGRESOS */}
-        <TableCell className={`p-2 text-sm bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80 font-medium'}`}>{formatCLP(item.ganancia)}</TableCell>
-        <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.valor_neto)}</TableCell>
-        <TableCell className="p-2 align-middle text-center bg-emerald-50/30">
-           <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-center border ${
-               (item.iva_incluido ?? true)
-                 ? 'bg-blue-100 text-blue-800 border-blue-200'
-                 : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-             }`}>
-             {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
-           </span>
-        </TableCell>
-        <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva)}</TableCell>
-        <TableCell className={`p-2 text-sm font-semibold bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900'}`}>{formatCLP(item.valor_total)}</TableCell>
-        <TableCell className={`p-2 text-right font-bold bg-emerald-50/30 border-r ${isChild ? 'text-emerald-700/60' : 'text-emerald-700'}`}>{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+        {(item.es_insumo ?? false) ? (
+          <TableCell colSpan={6} className="p-2 align-middle text-center bg-muted/30 border-r">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest bg-muted/50 px-3 py-1 rounded">
+              Costo Interno (Insumo)
+            </span>
+          </TableCell>
+        ) : (
+          <>
+            <TableCell className={`p-2 text-sm bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80 font-medium'}`}>{formatCLP(item.ganancia)}</TableCell>
+            <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.valor_neto)}</TableCell>
+            <TableCell className="p-2 align-middle text-center bg-emerald-50/30">
+               <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-center border ${
+                   (item.iva_incluido ?? true)
+                     ? 'bg-blue-100 text-blue-800 border-blue-200'
+                     : 'bg-zinc-100 text-zinc-500 border-zinc-200'
+                 }`}>
+                 {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
+               </span>
+            </TableCell>
+            <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva)}</TableCell>
+            <TableCell className={`p-2 text-sm font-semibold bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900'}`}>{formatCLP(item.valor_total)}</TableCell>
+            <TableCell className={`p-2 text-right font-bold bg-emerald-50/30 border-r ${isChild ? 'text-emerald-700/60' : 'text-emerald-700'}`}>{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+          </>
+        )}
         
         {/* RESUMEN */}
         <TableCell className={`p-2 text-center text-xs font-semibold ${isChild ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>{formatPercentage(item.margen)}</TableCell>
@@ -395,20 +420,57 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
             })}
           </TableBody>
           <TableFooter>
-            <TableRow className="bg-muted/50 font-semibold">
-              <TableCell colSpan={5} className="font-bold text-right border-r">Totales Globales:</TableCell>
+            {/* Fila 1: Productos Facturables */}
+            <TableRow className="bg-emerald-50/10 font-semibold border-b">
+              <TableCell colSpan={5} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
-              <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totals.costo)}</TableCell>
+              <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totalesFacturables.costo)}</TableCell>
               
-              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.ganancia)}</TableCell>
-              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_neto)}</TableCell>
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.ganancia)}</TableCell>
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.valor_neto)}</TableCell>
               <TableCell className="bg-emerald-50/20"></TableCell>
-              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.iva)}</TableCell>
-              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_total)}</TableCell>
-              <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700 text-lg">{formatCLP(totals.valor_total)}</TableCell>
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.iva)}</TableCell>
+              <TableCell className="bg-emerald-50/20 text-emerald-900/80"></TableCell>
+              <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700">{formatCLP(totalesFacturables.valor_total)}</TableCell>
               
               <TableCell colSpan={isCompleted ? 2 : 3}></TableCell>
+            </TableRow>
+            
+            {/* Fila 2: Insumos / Costos Operativos */}
+            {totalesInsumos.costo > 0 && (
+              <TableRow className="bg-red-50/10 font-semibold border-b">
+                <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
+                <TableCell className="bg-red-50/20"></TableCell>
+                <TableCell className="bg-red-50/20"></TableCell>
+                <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700">{formatCLP(totalesInsumos.costo)}</TableCell>
+                
+                <TableCell colSpan={6} className="bg-muted/20 border-r text-center text-xs text-muted-foreground italic">
+                  Costos hundidos que merman la utilidad final
+                </TableCell>
+                <TableCell colSpan={isCompleted ? 2 : 3}></TableCell>
+              </TableRow>
+            )}
+
+            {/* Fila 3: Gran Total / Utilidad Neta */}
+            <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
+              <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
+              <TableCell className="bg-red-50/40"></TableCell>
+              <TableCell className="bg-red-50/40"></TableCell>
+              <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-base">{formatCLP(costoTotalGlobal)}</TableCell>
+              
+              <TableCell colSpan={5} className="bg-emerald-50/40 text-right text-emerald-900 pr-4">
+                Utilidad Neta (Ingresos - TODOS los Costos): 
+                <span className={`ml-2 text-base ${utilidadNeta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {formatCLP(utilidadNeta)}
+                </span>
+              </TableCell>
+              <TableCell className="bg-emerald-50/40 border-r text-right font-black text-emerald-800 text-lg">
+                {formatCLP(totalesFacturables.valor_total)}
+              </TableCell>
+              
+              <TableCell className="text-center font-black text-primary text-base border-r">{formatPercentage(margenReal)}</TableCell>
+              <TableCell colSpan={isCompleted ? 1 : 2}></TableCell>
             </TableRow>
           </TableFooter>
         </Table>

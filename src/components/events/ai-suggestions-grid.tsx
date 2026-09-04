@@ -72,6 +72,7 @@ export function AiSuggestionsGrid({
         tipo_doc_costo: updatedItem.tipo_doc_costo,
         parent_id: updatedItem.parent_id,
         iva_incluido: updatedItem.iva_incluido ?? true,
+        es_insumo: updatedItem.es_insumo ?? false,
       }).eq('id', updatedItem.id);
     } catch (e) {
       console.error("Error updating item", e);
@@ -96,16 +97,25 @@ export function AiSuggestionsGrid({
 
     const currentTipoDoc = (updatedItem.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
     const currentIvaIncluido = field === 'iva_incluido' ? newValue : (updatedItem.iva_incluido ?? true);
+    const currentEsInsumo = field === 'es_insumo' ? newValue : (updatedItem.es_insumo ?? false);
+
+    if (field === 'es_insumo') {
+      updatedItem.es_insumo = newValue;
+      if (newValue) {
+        updatedItem.ganancia = 0;
+        updatedItem.valor_total = 0;
+      }
+    }
 
     // Recalculate financials
     if (field === 'valor_total') {
-      const financials = calculateGananciaFromTotal(updatedItem.costo, updatedItem.valor_total, currentTipoDoc, currentIvaIncluido);
+      const financials = calculateGananciaFromTotal(updatedItem.costo, updatedItem.valor_total, currentTipoDoc, currentIvaIncluido, currentEsInsumo);
       updatedItem.ganancia = financials.ganancia;
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.ivaDebito;
       updatedItem.margen = financials.margen;
-    } else if (['costo', 'ganancia', 'sin_ganancia', 'tipo_doc_costo', 'iva_incluido'].includes(field)) {
-      const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia, currentTipoDoc, currentIvaIncluido);
+    } else if (['costo', 'ganancia', 'sin_ganancia', 'tipo_doc_costo', 'iva_incluido', 'es_insumo'].includes(field)) {
+      const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia, currentTipoDoc, currentIvaIncluido, currentEsInsumo);
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.ivaDebito;
       updatedItem.valor_total = financials.valorTotal;
@@ -126,7 +136,8 @@ export function AiSuggestionsGrid({
           if (item.id === updatedItem.parent_id) {
             const parentTipo = (item.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
             const parentIvaIncluido = item.iva_incluido ?? true;
-            const parentFinancials = calculateFinancials(newParentCost, item.ganancia, parentTipo, parentIvaIncluido);
+            const parentEsInsumo = item.es_insumo ?? false;
+            const parentFinancials = calculateFinancials(newParentCost, item.ganancia, parentTipo, parentIvaIncluido, parentEsInsumo);
             const newParent = {
               ...item,
               costo: newParentCost,
@@ -166,7 +177,8 @@ export function AiSuggestionsGrid({
 
     const tipoDoc = (manualItem.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
     const aplicaIva = manualItem.iva_incluido ?? true;
-    const financials = calculateFinancials(manualItem.costo, manualItem.ganancia, tipoDoc, aplicaIva);
+    const esInsumo = manualItem.es_insumo ?? false;
+    const financials = calculateFinancials(manualItem.costo, manualItem.ganancia, tipoDoc, aplicaIva, esInsumo);
 
     const newItem = {
       event_id: eventId,
@@ -175,13 +187,14 @@ export function AiSuggestionsGrid({
       tipo_evento: manualItem.tipo_evento,
       cantidad: manualItem.cantidad,
       costo: manualItem.costo,
-      ganancia: manualItem.ganancia,
+      ganancia: esInsumo ? 0 : manualItem.ganancia,
       valor_neto: financials.valorNeto,
       iva: financials.ivaDebito,
       valor_total: financials.valorTotal,
       margen: financials.margen,
       tipo_doc_costo: tipoDoc,
       iva_incluido: aplicaIva,
+      es_insumo: esInsumo,
       approved: false,
     };
 
@@ -277,7 +290,7 @@ export function AiSuggestionsGrid({
 
     const selectedItems = editableSuggestions.filter(s => selectedIds.includes(s.id!));
     const totalCost = selectedItems.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
-    const financials = calculateFinancials(totalCost, 0, 'factura', true);
+    const financials = calculateFinancials(totalCost, 0, 'factura', true, false);
 
     const parentItem = {
       event_id: eventId,
@@ -293,6 +306,7 @@ export function AiSuggestionsGrid({
       margen: financials.margen,
       tipo_doc_costo: 'factura',
       iva_incluido: true,
+      es_insumo: false,
       approved: false,
       parent_id: null
     };
@@ -309,9 +323,10 @@ export function AiSuggestionsGrid({
       // 2. Update children to set parent_id, and reset their ganancia to 0 to prevent double margin if we want
       for (const child of selectedItems) {
         const childIvaIncluido = child.iva_incluido ?? true;
-        const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura', childIvaIncluido); 
+        const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura', childIvaIncluido, true); 
         await (supabase.from('event_items') as any).update({ 
           parent_id: insertedParent.id,
+          es_insumo: true,
           ganancia: 0,
           valor_neto: childFinancials.valorNeto,
           iva: childFinancials.ivaDebito,
@@ -347,8 +362,10 @@ export function AiSuggestionsGrid({
 
   const topLevelItems = editableSuggestions.filter(s => !s.parent_id);
   
-  // Calculate totals only from top level items to prevent double counting
-  const totals = topLevelItems.reduce(
+  const facturables = topLevelItems.filter(item => !(item.es_insumo ?? false));
+  const insumos = topLevelItems.filter(item => (item.es_insumo ?? false));
+
+  const totalesFacturables = facturables.reduce(
     (acc, item) => ({
       costo: acc.costo + (item.costo * item.cantidad),
       ganancia: acc.ganancia + (item.ganancia * item.cantidad),
@@ -358,6 +375,17 @@ export function AiSuggestionsGrid({
     }),
     { costo: 0, ganancia: 0, valor_neto: 0, iva: 0, valor_total: 0 }
   );
+
+  const totalesInsumos = insumos.reduce(
+    (acc, item) => ({
+      costo: acc.costo + (item.costo * item.cantidad),
+    }),
+    { costo: 0 }
+  );
+
+  const costoTotalGlobal = totalesFacturables.costo + totalesInsumos.costo;
+  const utilidadNeta = totalesFacturables.ganancia - totalesInsumos.costo;
+  const margenReal = costoTotalGlobal > 0 ? (utilidadNeta / costoTotalGlobal) * 100 : 0;
 
   const renderRow = (item: EventItem, index: number, isChild: boolean = false) => {
     const isSelected = selectedIds.includes(item.id!);
@@ -405,6 +433,21 @@ export function AiSuggestionsGrid({
             onBlur={() => handleBlur(item.id!)}
             className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
           />
+        </TableCell>
+        <TableCell className="p-2 align-middle text-center">
+          <button
+            type="button"
+            onClick={() => handleInputChange(item.id!, 'es_insumo', !(item.es_insumo ?? false), true)}
+            className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
+              (item.es_insumo ?? false)
+                ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
+            }`}
+            title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
+            disabled={hasChildren}
+          >
+            {(item.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
+          </button>
         </TableCell>
         <TableCell className="p-2 border-r">
           <Input
@@ -469,51 +512,61 @@ export function AiSuggestionsGrid({
         <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(item.costo * item.cantidad)}</TableCell>
 
         {/* INGRESOS */}
-        <TableCell className="p-2 align-top bg-emerald-50/30">
-          <div className="flex flex-col gap-1 w-full">
-            <Input
-              type="number"
-              value={item.ganancia}
-              onChange={(e) => handleInputChange(item.id!, 'ganancia', e.target.value)}
-              onBlur={() => handleBlur(item.id!)}
-              className="h-8 text-sm w-full px-2"
-              disabled={item.ganancia === 0 && item.valor_total > 0} 
-            />
-            <button
-              type="button"
-              onClick={() => handleInputChange(item.id!, 'sin_ganancia', item.ganancia !== 0, true)}
-              className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${(item.ganancia === 0 && item.costo > 0) ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
-            >
-              {(item.ganancia === 0 && item.costo > 0) ? 'SIN GANANCIA' : 'CON GANANCIA'}
-            </button>
-          </div>
-        </TableCell>
-        <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.valor_neto)}</TableCell>
-        <TableCell className="p-2 align-top text-center bg-emerald-50/30">
-          <button
-             type="button"
-             onClick={() => handleInputChange(item.id!, 'iva_incluido', !(item.iva_incluido ?? true), true)}
-             className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider text-center transition-colors ${
-               (item.iva_incluido ?? true)
-                 ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
-                 : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
-             }`}
-             title="¿Este ítem incluye recargo de IVA Débito al cliente?"
-           >
-             {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
-           </button>
-        </TableCell>
-        <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.iva)}</TableCell>
-        <TableCell className="p-2 align-top font-semibold bg-emerald-50/30">
-          <Input
-            type="number"
-            value={item.valor_total || ''}
-            onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
-            onBlur={() => handleBlur(item.id!)}
-            className="h-8 text-sm w-full px-2 font-semibold border-emerald-200 focus:border-emerald-500"
-          />
-        </TableCell>
-        <TableCell className="p-2 align-top text-right font-bold text-emerald-700 bg-emerald-50/30 border-r">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+        {(item.es_insumo ?? false) ? (
+          <TableCell colSpan={6} className="p-2 align-middle text-center bg-muted/30 border-r">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest bg-muted/50 px-3 py-1 rounded">
+              Costo Interno (Insumo) - Sin Venta Directa
+            </span>
+          </TableCell>
+        ) : (
+          <>
+            <TableCell className="p-2 align-top bg-emerald-50/30">
+              <div className="flex flex-col gap-1 w-full">
+                <Input
+                  type="number"
+                  value={item.ganancia}
+                  onChange={(e) => handleInputChange(item.id!, 'ganancia', e.target.value)}
+                  onBlur={() => handleBlur(item.id!)}
+                  className="h-8 text-sm w-full px-2"
+                  disabled={item.ganancia === 0 && item.valor_total > 0} 
+                />
+                <button
+                  type="button"
+                  onClick={() => handleInputChange(item.id!, 'sin_ganancia', item.ganancia !== 0, true)}
+                  className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${(item.ganancia === 0 && item.costo > 0) ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
+                >
+                  {(item.ganancia === 0 && item.costo > 0) ? 'SIN GANANCIA' : 'CON GANANCIA'}
+                </button>
+              </div>
+            </TableCell>
+            <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.valor_neto)}</TableCell>
+            <TableCell className="p-2 align-top text-center bg-emerald-50/30">
+              <button
+                type="button"
+                onClick={() => handleInputChange(item.id!, 'iva_incluido', !(item.iva_incluido ?? true), true)}
+                className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider text-center transition-colors ${
+                  (item.iva_incluido ?? true)
+                    ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
+                    : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
+                }`}
+                title="¿Este ítem incluye recargo de IVA Débito al cliente?"
+              >
+                {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
+              </button>
+            </TableCell>
+            <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.iva)}</TableCell>
+            <TableCell className="p-2 align-top font-semibold bg-emerald-50/30">
+              <Input
+                type="number"
+                value={item.valor_total || ''}
+                onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
+                onBlur={() => handleBlur(item.id!)}
+                className="h-8 text-sm w-full px-2 font-semibold border-emerald-200 focus:border-emerald-500"
+              />
+            </TableCell>
+            <TableCell className="p-2 align-top text-right font-bold text-emerald-700 bg-emerald-50/30 border-r">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+          </>
+        )}
         
         {/* RESUMEN Y ACCIONES */}
         <TableCell className="p-2 align-top text-center text-xs font-semibold text-muted-foreground">{formatPercentage(item.margen)}</TableCell>
@@ -610,7 +663,7 @@ export function AiSuggestionsGrid({
         <Table className="min-w-[1350px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
-              <TableHead colSpan={4} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
+              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
               <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
               <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
               <TableHead colSpan={2} className="text-center font-bold text-muted-foreground">RESUMEN</TableHead>
@@ -618,7 +671,8 @@ export function AiSuggestionsGrid({
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[160px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
-              <TableHead className="min-w-[200px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
+              <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider text-center">Tipo</TableHead>
               <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
@@ -667,6 +721,20 @@ export function AiSuggestionsGrid({
                   }}
                   className="h-8 text-sm w-full bg-background/90"
                 />
+              </TableCell>
+              <TableCell className="p-2 align-middle text-center">
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('manual', 'es_insumo', !(manualItem.es_insumo ?? false))}
+                  className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
+                    (manualItem.es_insumo ?? false)
+                      ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                      : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
+                  }`}
+                  title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
+                >
+                  {(manualItem.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
+                </button>
               </TableCell>
               <TableCell className="p-2 border-r">
                 <Input
@@ -728,52 +796,61 @@ export function AiSuggestionsGrid({
               <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(manualItem.costo * manualItem.cantidad)}</TableCell>
 
               {/* INGRESOS MANUAL */}
-              <TableCell className="p-2 align-top bg-emerald-50/30">
-                <div className="flex flex-col gap-1 w-full">
-                  <Input
-                    type="number"
-                    placeholder="0"
-                    value={manualItem.ganancia || ''}
-                    onChange={(e) => handleInputChange('manual', 'ganancia', e.target.value)}
-                    className="h-8 text-sm w-full px-2 bg-background/90"
-                    disabled={manualItem.sin_ganancia}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleInputChange('manual', 'sin_ganancia', !manualItem.sin_ganancia)}
-                    className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${manualItem.sin_ganancia ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
-                  >
-                    {manualItem.sin_ganancia ? 'SIN GANANCIA' : 'CON GANANCIA'}
-                  </button>
-                </div>
-              </TableCell>
-              <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.valor_neto)}</TableCell>
-              <TableCell className="p-2 align-top text-center bg-emerald-50/30">
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('manual', 'iva_incluido', !(manualItem.iva_incluido ?? true))}
-                  className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider text-center transition-colors ${
-                    (manualItem.iva_incluido ?? true)
-                      ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
-                      : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
-                  }`}
-                  title="¿Este ítem incluye recargo de IVA Débito al cliente?"
-                >
-                  {(manualItem.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
-                </button>
-              </TableCell>
-              <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.iva)}</TableCell>
-              <TableCell className="p-2 align-top font-semibold text-emerald-700 bg-emerald-50/30">
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={manualItem.valor_total || ''}
-                  onChange={(e) => handleInputChange('manual', 'valor_total', e.target.value)}
-                  className="h-8 text-sm w-full px-2 bg-background/90 font-semibold border-emerald-200"
-                  disabled={manualItem.sin_ganancia}
-                />
-              </TableCell>
-              <TableCell className="p-2 align-top text-right font-bold text-emerald-700 bg-emerald-50/30 border-r">{formatCLP(manualItem.valor_total * manualItem.cantidad)}</TableCell>
+              {(manualItem.es_insumo ?? false) ? (
+                <TableCell colSpan={6} className="p-2 align-middle text-center bg-muted/30 border-r">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest bg-muted/50 px-3 py-1 rounded">
+                    Costo Interno (Insumo)
+                  </span>
+                </TableCell>
+              ) : (
+                <>
+                  <TableCell className="p-2 align-top bg-emerald-50/30">
+                    <div className="flex flex-col gap-1 w-full">
+                      <Input
+                        type="number"
+                        placeholder="0"
+                        value={manualItem.ganancia || ''}
+                        onChange={(e) => handleInputChange('manual', 'ganancia', e.target.value)}
+                        className="h-8 text-sm w-full px-2 bg-background/90"
+                        disabled={manualItem.sin_ganancia}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleInputChange('manual', 'sin_ganancia', !manualItem.sin_ganancia)}
+                        className={`text-[10px] px-1.5 py-0.5 rounded cursor-pointer border font-semibold uppercase tracking-wider text-center w-full transition-colors ${manualItem.sin_ganancia ? 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200' : 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200'}`}
+                      >
+                        {manualItem.sin_ganancia ? 'SIN GANANCIA' : 'CON GANANCIA'}
+                      </button>
+                    </div>
+                  </TableCell>
+                  <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.valor_neto)}</TableCell>
+                  <TableCell className="p-2 align-top text-center bg-emerald-50/30">
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange('manual', 'iva_incluido', !(manualItem.iva_incluido ?? true))}
+                      className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider text-center transition-colors ${
+                        (manualItem.iva_incluido ?? true)
+                          ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200'
+                          : 'bg-zinc-100 text-zinc-500 border-zinc-200 hover:bg-zinc-200'
+                      }`}
+                      title="¿Este ítem incluye recargo de IVA Débito al cliente?"
+                    >
+                      {(manualItem.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
+                    </button>
+                  </TableCell>
+                  <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(manualItem.iva)}</TableCell>
+                  <TableCell className="p-2 align-top font-semibold text-emerald-700 bg-emerald-50/30">
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={manualItem.valor_total || ''}
+                      onChange={(e) => handleInputChange('manual', 'valor_total', e.target.value)}
+                      className="h-8 text-sm w-full px-2 font-semibold bg-background/90 border-emerald-200 focus:border-emerald-500"
+                    />
+                  </TableCell>
+                  <TableCell className="p-2 align-top text-right font-bold text-emerald-700 bg-emerald-50/30 border-r">{formatCLP(manualItem.valor_total * manualItem.cantidad)}</TableCell>
+                </>
+              )}
               
               {/* RESUMEN Y ACCIONES MANUAL */}
               <TableCell className="p-2 align-top text-center text-xs font-semibold text-muted-foreground">{formatPercentage(manualItem.margen)}</TableCell>
@@ -824,18 +901,57 @@ export function AiSuggestionsGrid({
 
           {editableSuggestions.length > 0 && (
             <TableFooter>
-              <TableRow className="bg-muted/50 font-semibold">
-                <TableCell colSpan={4} className="font-bold text-right border-r">Totales en Borrador:</TableCell>
+              {/* Fila 1: Productos Facturables */}
+              <TableRow className="bg-emerald-50/10 font-semibold border-b">
+                <TableCell colSpan={5} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
-                <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totals.costo)}</TableCell>
-                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.ganancia)}</TableCell>
-                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_neto)}</TableCell>
+                <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totalesFacturables.costo)}</TableCell>
+                
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.ganancia)}</TableCell>
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.valor_neto)}</TableCell>
                 <TableCell className="bg-emerald-50/20"></TableCell>
-                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.iva)}</TableCell>
-                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totals.valor_total)}</TableCell>
-                <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700 text-base">{formatCLP(totals.valor_total)}</TableCell>
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.iva)}</TableCell>
+                <TableCell className="bg-emerald-50/20 text-emerald-900/80"></TableCell>
+                <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700">{formatCLP(totalesFacturables.valor_total)}</TableCell>
+                
                 <TableCell colSpan={2}></TableCell>
+              </TableRow>
+              
+              {/* Fila 2: Insumos / Costos Operativos */}
+              {totalesInsumos.costo > 0 && (
+                <TableRow className="bg-red-50/10 font-semibold border-b">
+                  <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
+                  <TableCell className="bg-red-50/20"></TableCell>
+                  <TableCell className="bg-red-50/20"></TableCell>
+                  <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700">{formatCLP(totalesInsumos.costo)}</TableCell>
+                  
+                  <TableCell colSpan={6} className="bg-muted/20 border-r text-center text-xs text-muted-foreground italic">
+                    Costos hundidos que merman la utilidad final
+                  </TableCell>
+                  <TableCell colSpan={2}></TableCell>
+                </TableRow>
+              )}
+
+              {/* Fila 3: Gran Total / Utilidad Neta */}
+              <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
+                <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
+                <TableCell className="bg-red-50/40"></TableCell>
+                <TableCell className="bg-red-50/40"></TableCell>
+                <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-base">{formatCLP(costoTotalGlobal)}</TableCell>
+                
+                <TableCell colSpan={5} className="bg-emerald-50/40 text-right text-emerald-900 pr-4">
+                  Utilidad Neta (Ingresos - TODOS los Costos): 
+                  <span className={`ml-2 text-base ${utilidadNeta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {formatCLP(utilidadNeta)}
+                  </span>
+                </TableCell>
+                <TableCell className="bg-emerald-50/40 border-r text-right font-black text-emerald-800 text-lg">
+                  {formatCLP(totalesFacturables.valor_total)}
+                </TableCell>
+                
+                <TableCell className="text-center font-black text-primary text-base border-r">{formatPercentage(margenReal)}</TableCell>
+                <TableCell colSpan={1}></TableCell>
               </TableRow>
             </TableFooter>
           )}

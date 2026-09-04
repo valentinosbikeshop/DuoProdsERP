@@ -22,11 +22,24 @@ export function calculateFinancials(
   costo: number, 
   ganancia: number, 
   tipoDoc: 'factura' | 'boleta' = 'factura',
-  aplicaIvaVenta: boolean = true
+  aplicaIvaVenta: boolean = true,
+  esInsumo: boolean = false
 ) {
   // IVA Crédito (Egresos)
   const costoNeto = tipoDoc === 'boleta' ? costo : Math.round(costo / 1.19);
   const ivaCredito = costo - costoNeto;
+
+  if (esInsumo) {
+    return {
+      costoNeto,
+      ivaCredito,
+      valorNeto: 0,
+      iva: 0,
+      ivaDebito: 0,
+      valorTotal: 0,
+      margen: 0
+    };
+  }
 
   // IVA Débito (Ingresos)
   const valorNeto = costoNeto + ganancia;
@@ -50,11 +63,24 @@ export function calculateGananciaFromTotal(
   costo: number, 
   valorTotal: number, 
   tipoDoc: 'factura' | 'boleta' = 'factura',
-  aplicaIvaVenta: boolean = true
+  aplicaIvaVenta: boolean = true,
+  esInsumo: boolean = false
 ) {
   // IVA Crédito (Egresos)
   const costoNeto = tipoDoc === 'boleta' ? costo : Math.round(costo / 1.19);
   const ivaCredito = costo - costoNeto;
+
+  if (esInsumo) {
+    return {
+      costoNeto,
+      ivaCredito,
+      ganancia: 0,
+      valorNeto: 0,
+      iva: 0,
+      ivaDebito: 0,
+      margen: 0
+    };
+  }
 
   // IVA Débito (Ingresos)
   const valorNeto = aplicaIvaVenta ? Math.round(valorTotal / 1.19) : valorTotal;
