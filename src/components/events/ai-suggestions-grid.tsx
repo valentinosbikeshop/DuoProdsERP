@@ -50,6 +50,8 @@ export function AiSuggestionsGrid({
   const [approvingAll, setApprovingAll] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverParentId, setDragOverParentId] = useState<string | null>(null);
   const supabase = createClient();
   
   useEffect(() => {
@@ -273,32 +275,33 @@ export function AiSuggestionsGrid({
       const { id: _, created_at: __, ...itemData } = itemToDuplicate as any;
       itemData.servicio = `${itemData.servicio} (Copia)`;
       
-      const { data: newParentData, error: parentError } = await supabase
-        .from('event_items')
+      const { data: newParentData, error: parentError } = await (supabase
+        .from('event_items') as any)
         .insert(itemData)
         .select()
         .single();
         
       if (parentError) throw parentError;
       
-      let newItems = [newParentData as AiSuggestion];
+      const createdParent = newParentData as EventItem;
+      let newItems: EventItem[] = [createdParent];
 
       if (isParent) {
         const childrenToDuplicate = editableSuggestions.filter(s => s.parent_id === id);
         if (childrenToDuplicate.length > 0) {
           const childrenData = childrenToDuplicate.map(child => {
             const { id: _childId, created_at: _childCreatedAt, ...childData } = child as any;
-            childData.parent_id = newParentData.id;
+            childData.parent_id = createdParent.id;
             return childData;
           });
           
-          const { data: newChildrenData, error: childrenError } = await supabase
-            .from('event_items')
+          const { data: newChildrenData, error: childrenError } = await (supabase
+            .from('event_items') as any)
             .insert(childrenData)
             .select();
             
           if (childrenError) throw childrenError;
-          newItems = [...newItems, ...(newChildrenData as AiSuggestion[])];
+          newItems = [...newItems, ...(newChildrenData as EventItem[])];
         }
       }
       
@@ -328,8 +331,8 @@ export function AiSuggestionsGrid({
     
     try {
       const updatedItem = { ...draggedItem, parent_id: targetParentId };
-      const { error } = await supabase
-        .from('event_items')
+      const { error } = await (supabase
+        .from('event_items') as any)
         .update({ parent_id: targetParentId })
         .eq('id', draggedId);
         
@@ -340,7 +343,7 @@ export function AiSuggestionsGrid({
       const targetSiblings = newSuggestions.filter(s => s.parent_id === targetParentId);
       const newTargetCost = targetSiblings.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
       const targetFin = calculateFinancials(newTargetCost, targetParent.ganancia, targetParent.tipo_doc_costo || 'factura', targetParent.iva_incluido ?? true, targetParent.es_insumo ?? false);
-      const updatedTargetParent = {
+      const updatedTargetParent: EventItem = {
         ...targetParent,
         costo: newTargetCost,
         valor_neto: targetFin.valorNeto,
@@ -349,7 +352,7 @@ export function AiSuggestionsGrid({
         margen: targetFin.margen
       };
       
-      let updatedOldParent: AiSuggestion | null = null;
+      let updatedOldParent: EventItem | null = null;
       if (oldParentId) {
         const oldParent = newSuggestions.find(s => s.id === oldParentId);
         if (oldParent) {
@@ -368,15 +371,15 @@ export function AiSuggestionsGrid({
       }
       
       newSuggestions = newSuggestions.map(item => {
-        if (item.id === targetParentId) return updatedTargetParent as AiSuggestion;
-        if (oldParentId && item.id === oldParentId) return updatedOldParent as AiSuggestion;
+        if (item.id === targetParentId) return updatedTargetParent;
+        if (oldParentId && item.id === oldParentId && updatedOldParent) return updatedOldParent;
         return item;
       });
       
       setEditableSuggestions(newSuggestions);
       
-      await updateSupabase(updatedTargetParent as AiSuggestion);
-      if (updatedOldParent) await updateSupabase(updatedOldParent as AiSuggestion);
+      await updateSupabase(updatedTargetParent);
+      if (updatedOldParent) await updateSupabase(updatedOldParent);
       
       if (onDraftChanged) onDraftChanged();
       
