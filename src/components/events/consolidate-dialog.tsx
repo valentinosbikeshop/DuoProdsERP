@@ -23,6 +23,7 @@ interface ConsolidateDialogProps {
     name: string;
     quantity: number;
     unitPrice?: number;
+    assignedQuantities: Record<string, number>;
   }) => Promise<void>;
 }
 
@@ -35,13 +36,32 @@ export function ConsolidateDialog({
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState<number>(100);
   const [unitPrice, setUnitPrice] = useState<string>('');
+  const [assignedQuantities, setAssignedQuantities] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const totalCost = selectedItems.reduce(
-    (acc, item) => acc + (item.costo || 0) * (item.cantidad || 1),
-    0
-  );
+  useEffect(() => {
+    if (open) {
+      setName('');
+      setQuantity(100);
+      setUnitPrice('');
+      setError(null);
+      const initial: Record<string, number> = {};
+      selectedItems.forEach((item) => {
+        if (item.id) {
+          initial[item.id] = item.cantidad || 1;
+        }
+      });
+      setAssignedQuantities(initial);
+    }
+  }, [open, selectedItems]);
+
+  const totalCost = selectedItems.reduce((acc, item) => {
+    const qty = item.id && assignedQuantities[item.id] !== undefined
+      ? assignedQuantities[item.id]
+      : (item.cantidad || 1);
+    return acc + (item.costo || 0) * qty;
+  }, 0);
 
   const validQty = Math.max(1, quantity || 1);
   const realUnitCost = Math.round(totalCost / validQty);
@@ -50,14 +70,12 @@ export function ConsolidateDialog({
   const unitProfit = parsedUnitPrice > realUnitCost ? parsedUnitPrice - realUnitCost : 0;
   const margin = realUnitCost > 0 && unitProfit > 0 ? (unitProfit / realUnitCost) * 100 : 0;
 
-  useEffect(() => {
-    if (open) {
-      setName('');
-      setQuantity(100);
-      setUnitPrice('');
-      setError(null);
-    }
-  }, [open]);
+  const handleItemQtyChange = (itemId: string, maxQty: number, valStr: string) => {
+    let val = parseInt(valStr);
+    if (isNaN(val) || val < 1) val = 1;
+    if (val > maxQty) val = maxQty;
+    setAssignedQuantities((prev) => ({ ...prev, [itemId]: val }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +95,7 @@ export function ConsolidateDialog({
         name: name.trim(),
         quantity: validQty,
         unitPrice: parsedUnitPrice > 0 ? parsedUnitPrice : undefined,
+        assignedQuantities,
       });
       onOpenChange(false);
     } catch (err: any) {
@@ -112,27 +131,68 @@ export function ConsolidateDialog({
           )}
 
           {/* Resumen de insumos a consolidar */}
-          <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2">
-            <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground pb-1 border-b border-border/50">
+          <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground pb-2 border-b border-border/50">
               <span className="flex items-center gap-1.5">
                 <Layers className="h-3.5 w-3.5 text-primary" />
                 {selectedItems.length} insumos seleccionados
               </span>
               <span className="text-foreground font-bold">
-                Costo Total Insumos: <span className="text-red-600">{formatCLP(totalCost)}</span>
+                Costo Asignado Receta: <span className="text-red-600">{formatCLP(totalCost)}</span>
               </span>
             </div>
-            <div className="max-h-28 overflow-y-auto space-y-1 pr-1 custom-scrollbar text-xs">
-              {selectedItems.map((item) => (
-                <div key={item.id} className="flex justify-between items-center text-muted-foreground py-0.5">
-                  <span className="truncate max-w-[280px]">
-                    <strong className="text-foreground">{item.cantidad}x</strong> {item.servicio}
-                  </span>
-                  <span className="font-medium text-red-700">
-                    {formatCLP((item.costo || 0) * (item.cantidad || 1))}
-                  </span>
-                </div>
-              ))}
+            
+            <p className="text-[11px] text-muted-foreground">
+              Ajusta la cantidad a utilizar de cada insumo. Si usas menos del total, el restante permanecerá disponible en la compra original para otras preparaciones.
+            </p>
+
+            <div className="max-h-48 overflow-y-auto space-y-2 pr-1 custom-scrollbar text-xs">
+              {selectedItems.map((item) => {
+                const assigned = item.id && assignedQuantities[item.id] !== undefined
+                  ? assignedQuantities[item.id]
+                  : (item.cantidad || 1);
+                const max = item.cantidad || 1;
+                const remaining = max - assigned;
+                const itemSubtotal = (item.costo || 0) * assigned;
+
+                return (
+                  <div key={item.id} className="p-2 rounded-lg bg-background border border-border/70 space-y-1.5 shadow-2xs">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="font-medium text-foreground truncate">
+                        {item.servicio}
+                      </span>
+                      <span className="font-bold text-red-600 shrink-0">
+                        {formatCLP(itemSubtotal)}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/40 text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px]">Asignar a esta receta:</span>
+                        <Input
+                          type="number"
+                          min="1"
+                          max={max}
+                          value={assigned}
+                          onChange={(e) => item.id && handleItemQtyChange(item.id, max, e.target.value)}
+                          className="h-6.5 w-14 text-center text-xs font-bold px-1 rounded-md"
+                        />
+                        <span className="text-[11px]">de {max} comprados</span>
+                      </div>
+
+                      {remaining > 0 ? (
+                        <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                          Quedan {remaining} en compra original
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded">
+                          Uso total (100%)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

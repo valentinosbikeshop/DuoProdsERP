@@ -54,8 +54,9 @@ export type EventItem = {
   created_at: string;
   parent_id?: string | null;
   iva_incluido?: boolean;
-  costo_desglosado?: boolean;
   es_insumo?: boolean;
+  source_item_id?: string | null;
+  cantidad_original?: number | null;
 };
 
 // For Supabase client type safety
