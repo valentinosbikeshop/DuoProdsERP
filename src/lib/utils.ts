@@ -78,6 +78,7 @@ export function calculateGananciaFromTotal(
       valorNeto: 0,
       iva: 0,
       ivaDebito: 0,
+      valorTotal: 0,
       margen: 0
     };
   }
@@ -96,6 +97,7 @@ export function calculateGananciaFromTotal(
     valorNeto, 
     iva: ivaDebito, 
     ivaDebito,
+    valorTotal,
     margen: Math.round(margen * 10) / 10 
   };
 }

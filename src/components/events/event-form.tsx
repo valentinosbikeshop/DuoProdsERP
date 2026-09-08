@@ -7,12 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { parseDateSafe } from '@/lib/utils';
+import { Store, Sparkles } from 'lucide-react';
 
 export function EventForm() {
   const router = useRouter();
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasRetailSales, setHasRetailSales] = useState(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,7 +43,7 @@ export function EventForm() {
         year = parsed.year;
       }
 
-      const { error: insertError } = await supabase.from('events').insert({
+      let { error: insertError } = await supabase.from('events').insert({
         name,
         client_company: client_company || null,
         location: location || null,
@@ -51,7 +53,24 @@ export function EventForm() {
         created_by: user.id,
         month,
         year,
+        has_retail_sales: hasRetailSales,
       } as any).select().single();
+
+      if (insertError && (insertError.message?.includes('has_retail_sales') || insertError.code === 'PGRST204')) {
+        console.warn('has_retail_sales column not found in schema. Please run add_has_retail_sales.sql in Supabase.');
+        const retry = await supabase.from('events').insert({
+          name,
+          client_company: client_company || null,
+          location: location || null,
+          event_date: event_date || null,
+          description: description || null,
+          status: 'planning',
+          created_by: user.id,
+          month,
+          year,
+        } as any).select().single();
+        insertError = retry.error;
+      }
 
       if (insertError) throw insertError;
 
@@ -106,6 +125,34 @@ export function EventForm() {
         <p className="text-xs text-muted-foreground mt-1">
           💡 En el siguiente paso podrás adjuntar documentos PDF o Excel (Riders técnicos, presupuestos del cliente) para que la Inteligencia Artificial los analice y extraiga costos o requerimientos especiales.
         </p>
+      </div>
+
+      {/* Selector de Modo de Venta / Tipo de Operación */}
+      <div className="rounded-xl border border-border/80 bg-card/60 p-4.5 space-y-3 transition-all">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <Label htmlFor="has_retail_sales" className="text-sm font-semibold flex items-center gap-2 cursor-pointer">
+              <Store className="h-4 w-4 text-primary" />
+              ¿Habilitar Ventas al por Menor (Bar / Fondas / Venta Unitaria)?
+            </Label>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Activa la consolidación de productos (ej. tragos, comida), división de costo total entre cantidad de unidades y separación de materias primas/insumos vs. venta directa al público.
+            </p>
+          </div>
+          <input 
+            type="checkbox" 
+            id="has_retail_sales" 
+            checked={hasRetailSales}
+            onChange={(e) => setHasRetailSales(e.target.checked)}
+            className="h-5 w-5 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0"
+          />
+        </div>
+        {hasRetailSales && (
+          <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary font-medium flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span>Sección de retail y consolidación de costos activada para este evento.</span>
+          </div>
+        )}
       </div>
 
       <Button type="submit" disabled={loading} className="w-full">

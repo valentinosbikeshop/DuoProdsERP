@@ -32,6 +32,7 @@ export type Event = {
   created_by: string | null;
   created_at: string;
   deleted_at: string | null;
+  has_retail_sales?: boolean;
 };
 
 export type EventItem = {

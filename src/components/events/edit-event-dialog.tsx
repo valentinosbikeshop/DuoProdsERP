@@ -19,7 +19,9 @@ import {
   MapPin, 
   FileText, 
   CalendarDays, 
-  Save 
+  Save,
+  Store,
+  Sparkles
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { parseDateSafe } from '@/lib/utils';
@@ -40,6 +42,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
     location: event.location || '',
     event_date: event.event_date || '',
     description: event.description || '',
+    has_retail_sales: event.has_retail_sales || false,
   });
 
   useEffect(() => {
@@ -50,6 +53,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
         location: event.location || '',
         event_date: event.event_date || '',
         description: event.description || '',
+        has_retail_sales: event.has_retail_sales || false,
       });
       setErrorMsg(null);
     }
@@ -80,7 +84,7 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
     }
 
     try {
-      const { data, error } = await (supabase.from('events') as any)
+      let { data, error } = await (supabase.from('events') as any)
         .update({
           name: formData.name.trim(),
           client_company: formData.client_company.trim() || null,
@@ -89,10 +93,30 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
           description: formData.description.trim() || null,
           month,
           year,
+          has_retail_sales: formData.has_retail_sales,
         })
         .eq('id', event.id)
         .select()
         .single();
+
+      if (error && (error.message?.includes('has_retail_sales') || error.code === 'PGRST204')) {
+        console.warn('has_retail_sales column not found in schema. Please run add_has_retail_sales.sql in Supabase.');
+        const retry = await (supabase.from('events') as any)
+          .update({
+            name: formData.name.trim(),
+            client_company: formData.client_company.trim() || null,
+            location: formData.location.trim() || null,
+            event_date: formData.event_date || null,
+            description: formData.description.trim() || null,
+            month,
+            year,
+          })
+          .eq('id', event.id)
+          .select()
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
 
       if (error) {
         throw error;
@@ -233,6 +257,34 @@ export function EditEventDialog({ event, onUpdate }: EditEventDialogProps) {
               <p className="text-[11px] text-muted-foreground">
                 Tip: Esta información sirve como referencia para el equipo y el informe final.
               </p>
+            </div>
+
+            {/* Selector de Modo de Venta / Tipo de Operación */}
+            <div className="rounded-xl border border-border/80 bg-card/60 p-4 space-y-3 transition-all">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="edit_has_retail_sales" className="text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+                    <Store className="h-3.5 w-3.5 text-primary" />
+                    ¿Habilitar Ventas al por Menor (Retail / Bar / Fondas)?
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Activa la consolidación de productos, rendimiento de porciones para venta unitaria y separación de insumos vs venta al público.
+                  </p>
+                </div>
+                <input 
+                  type="checkbox" 
+                  id="edit_has_retail_sales" 
+                  checked={formData.has_retail_sales}
+                  onChange={(e) => setFormData(prev => ({ ...prev, has_retail_sales: e.target.checked }))}
+                  className="h-4 w-4 mt-0.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer shrink-0"
+                />
+              </div>
+              {formData.has_retail_sales && (
+                <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-[11px] text-primary font-medium flex items-center gap-2">
+                  <Sparkles className="h-3 w-3 shrink-0" />
+                  <span>Modo de venta al por menor y productos consolidados habilitado.</span>
+                </div>
+              )}
             </div>
           </div>
 

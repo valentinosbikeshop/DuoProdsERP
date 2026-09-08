@@ -17,11 +17,13 @@ import {
   TableFooter,
 } from '@/components/ui/table';
 import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy } from 'lucide-react';
+import { ConsolidateDialog } from './consolidate-dialog';
 
 interface AiSuggestionsGridProps {
   draftItems?: EventItem[];
   eventId: string;
   onDraftChanged?: () => void;
+  hasRetailSales?: boolean;
 }
 
 const emptySuggestion: AiSuggestion = {
@@ -43,6 +45,7 @@ export function AiSuggestionsGrid({
   draftItems = [],
   eventId,
   onDraftChanged,
+  hasRetailSales = false,
 }: AiSuggestionsGridProps) {
   const [editableSuggestions, setEditableSuggestions] = useState<EventItem[]>(draftItems);
   const [manualItem, setManualItem] = useState<AiSuggestion>({ ...emptySuggestion, id: 'manual' });
@@ -52,6 +55,7 @@ export function AiSuggestionsGrid({
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverParentId, setDragOverParentId] = useState<string | null>(null);
+  const [consolidateOpen, setConsolidateOpen] = useState(false);
   const supabase = createClient();
   
   useEffect(() => {
@@ -133,20 +137,22 @@ export function AiSuggestionsGrid({
     } else {
       let newSuggestions = editableSuggestions.map((item) => (item.id === id ? updatedItem : item));
       
-      // If a child is updated, recalculate parent's cost
+      // If a child is updated, recalculate parent's unit cost (total children cost / parent quantity)
       if (updatedItem.parent_id && ['costo', 'cantidad', 'tipo_doc_costo'].includes(field)) {
         const siblingsAndSelf = newSuggestions.filter(s => s.parent_id === updatedItem.parent_id);
-        const newParentCost = siblingsAndSelf.reduce((sum, s) => sum + (s.costo * s.cantidad), 0);
+        const newTotalChildrenCost = siblingsAndSelf.reduce((sum, s) => sum + (s.costo * s.cantidad), 0);
         
         newSuggestions = newSuggestions.map(item => {
           if (item.id === updatedItem.parent_id) {
             const parentTipo = (item.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
             const parentIvaIncluido = item.iva_incluido ?? true;
             const parentEsInsumo = item.es_insumo ?? false;
-            const parentFinancials = calculateFinancials(newParentCost, item.ganancia, parentTipo, parentIvaIncluido, parentEsInsumo);
+            const parentQty = (item.cantidad && item.cantidad > 0) ? item.cantidad : 1;
+            const unitCost = Math.round(newTotalChildrenCost / parentQty);
+            const parentFinancials = calculateFinancials(unitCost, item.ganancia, parentTipo, parentIvaIncluido, parentEsInsumo);
             const newParent = {
               ...item,
-              costo: newParentCost,
+              costo: unitCost,
               valor_neto: parentFinancials.valorNeto,
               iva: parentFinancials.ivaDebito,
               valor_total: parentFinancials.valorTotal,
@@ -157,6 +163,25 @@ export function AiSuggestionsGrid({
           }
           return item;
         });
+      }
+
+      // If a parent's cantidad is updated, recalculate its unit cost based on total children cost
+      if (!updatedItem.parent_id && field === 'cantidad') {
+        const children = newSuggestions.filter(s => s.parent_id === updatedItem.id);
+        if (children.length > 0) {
+          const totalChildrenCost = children.reduce((sum, s) => sum + (s.costo * s.cantidad), 0);
+          const newQty = Number(newValue) > 0 ? Number(newValue) : 1;
+          const unitCost = Math.round(totalChildrenCost / newQty);
+          const parentTipo = (updatedItem.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
+          const parentIvaIncluido = updatedItem.iva_incluido ?? true;
+          const parentFinancials = calculateFinancials(unitCost, updatedItem.ganancia, parentTipo, parentIvaIncluido, false);
+
+          updatedItem.costo = unitCost;
+          updatedItem.valor_neto = parentFinancials.valorNeto;
+          updatedItem.iva = parentFinancials.ivaDebito;
+          updatedItem.valor_total = parentFinancials.valorTotal;
+          updatedItem.margen = parentFinancials.margen;
+        }
       }
 
       setEditableSuggestions(newSuggestions);
@@ -342,10 +367,12 @@ export function AiSuggestionsGrid({
       
       const targetSiblings = newSuggestions.filter(s => s.parent_id === targetParentId);
       const newTargetCost = targetSiblings.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
-      const targetFin = calculateFinancials(newTargetCost, targetParent.ganancia, targetParent.tipo_doc_costo || 'factura', targetParent.iva_incluido ?? true, targetParent.es_insumo ?? false);
+      const targetQty = (targetParent.cantidad && targetParent.cantidad > 0) ? targetParent.cantidad : 1;
+      const targetUnitCost = Math.round(newTargetCost / targetQty);
+      const targetFin = calculateFinancials(targetUnitCost, targetParent.ganancia, targetParent.tipo_doc_costo || 'factura', targetParent.iva_incluido ?? true, targetParent.es_insumo ?? false);
       const updatedTargetParent: EventItem = {
         ...targetParent,
-        costo: newTargetCost,
+        costo: targetUnitCost,
         valor_neto: targetFin.valorNeto,
         iva: targetFin.ivaDebito,
         valor_total: targetFin.valorTotal,
@@ -358,10 +385,12 @@ export function AiSuggestionsGrid({
         if (oldParent) {
           const oldSiblings = newSuggestions.filter(s => s.parent_id === oldParentId);
           const newOldCost = oldSiblings.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
-          const oldFin = calculateFinancials(newOldCost, oldParent.ganancia, oldParent.tipo_doc_costo || 'factura', oldParent.iva_incluido ?? true, oldParent.es_insumo ?? false);
+          const oldQty = (oldParent.cantidad && oldParent.cantidad > 0) ? oldParent.cantidad : 1;
+          const oldUnitCost = Math.round(newOldCost / oldQty);
+          const oldFin = calculateFinancials(oldUnitCost, oldParent.ganancia, oldParent.tipo_doc_costo || 'factura', oldParent.iva_incluido ?? true, oldParent.es_insumo ?? false);
           updatedOldParent = {
             ...oldParent,
-            costo: newOldCost,
+            costo: oldUnitCost,
             valor_neto: oldFin.valorNeto,
             iva: oldFin.ivaDebito,
             valor_total: oldFin.valorTotal,
@@ -418,24 +447,36 @@ export function AiSuggestionsGrid({
     }
   };
 
-  const handleConsolidate = async () => {
+  const handleConsolidateClick = () => {
     if (selectedIds.length < 2) return;
-    
-    const name = window.prompt("Ingresa el nombre del producto consolidado (Ej: Piscolas (100 un)):");
-    if (!name || !name.trim()) return;
+    setConsolidateOpen(true);
+  };
 
+  const handlePerformConsolidate = async ({ name, quantity, unitPrice }: { name: string; quantity: number; unitPrice?: number }) => {
     const selectedItems = editableSuggestions.filter(s => selectedIds.includes(s.id!));
     const totalCost = selectedItems.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
-    const financials = calculateFinancials(totalCost, 0, 'factura', true, false);
+    const validQty = Math.max(1, quantity);
+    const realUnitCost = Math.round(totalCost / validQty);
+
+    let gananciaCalculada = 0;
+    let financials;
+    if (unitPrice && unitPrice > 0) {
+      const fin = calculateGananciaFromTotal(realUnitCost, unitPrice, 'factura', true, false);
+      gananciaCalculada = fin.ganancia;
+      financials = fin;
+    } else {
+      financials = calculateFinancials(realUnitCost, 0, 'factura', true, false);
+      gananciaCalculada = 0;
+    }
 
     const parentItem = {
       event_id: eventId,
       servicio: name.trim(),
-      detalle: 'Consolidado',
+      detalle: `Consolidado (${validQty} un)`,
       tipo_evento: 'Consolidado',
-      cantidad: 1,
-      costo: totalCost,
-      ganancia: 0,
+      cantidad: validQty,
+      costo: realUnitCost,
+      ganancia: gananciaCalculada,
       valor_neto: financials.valorNeto,
       iva: financials.ivaDebito,
       valor_total: financials.valorTotal,
@@ -456,7 +497,7 @@ export function AiSuggestionsGrid({
         
       if (insertError || !insertedParent) throw insertError || new Error("Failed to insert parent");
 
-      // 2. Update children to set parent_id, and reset their ganancia to 0 to prevent double margin if we want
+      // 2. Update children to set parent_id, and reset their ganancia to 0 to prevent double margin
       for (const child of selectedItems) {
         const childIvaIncluido = child.iva_incluido ?? true;
         const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura', childIvaIncluido, true); 
@@ -481,6 +522,7 @@ export function AiSuggestionsGrid({
       } else {
         alert(`Hubo un error al consolidar los ítems: ${e?.message || "Error desconocido"}`);
       }
+      throw e;
     }
   };
 
@@ -596,31 +638,38 @@ export function AiSuggestionsGrid({
             className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
           />
         </TableCell>
-        <TableCell className="p-2 align-middle text-center">
-          <button
-            type="button"
-            onClick={() => handleInputChange(item.id!, 'es_insumo', !(item.es_insumo ?? false), true)}
-            className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
-              (item.es_insumo ?? false)
-                ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
-                : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
-            }`}
-            title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
-            disabled={hasChildren}
-          >
-            {(item.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
-          </button>
-        </TableCell>
+        {hasRetailSales && (
+          <TableCell className="p-2 align-middle text-center">
+            <button
+              type="button"
+              onClick={() => handleInputChange(item.id!, 'es_insumo', !(item.es_insumo ?? false), true)}
+              className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
+                (item.es_insumo ?? false)
+                  ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                  : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
+              }`}
+              title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
+              disabled={hasChildren}
+            >
+              {(item.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
+            </button>
+          </TableCell>
+        )}
         <TableCell className="p-2 border-r">
           <Input
             type="number"
             value={item.cantidad}
             onChange={(e) => handleInputChange(item.id!, 'cantidad', e.target.value)}
             onBlur={(e) => handleBlur(item.id!, e)}
-            className="h-8 text-sm w-full text-center px-1"
+            className="h-8 text-sm w-full text-center px-1 font-semibold"
             min="1"
-            disabled={hasChildren} 
+            title={hasChildren ? "Rendimiento / Unidades a la venta" : "Cantidad"}
           />
+          {hasChildren && (
+            <span className="block text-[9px] text-primary/80 font-semibold text-center whitespace-nowrap mt-0.5">
+              A la venta
+            </span>
+          )}
         </TableCell>
         
         {/* EGRESOS */}
@@ -633,7 +682,13 @@ export function AiSuggestionsGrid({
               onBlur={(e) => handleBlur(item.id!, e)}
               className="h-8 text-sm w-full px-2"
               disabled={hasChildren} 
+              title={hasChildren ? "Costo unitario resultante (Total insumos ÷ Unidades a la venta)" : "Costo unitario"}
             />
+            {hasChildren && (
+              <span className="text-[10px] text-red-700 font-semibold text-center whitespace-nowrap" title="Costo total de insumos consolidados">
+                Total: {formatCLP(item.costo * item.cantidad)}
+              </span>
+            )}
             <div className="flex items-center gap-1 w-full">
               <button
                 type="button"
@@ -784,10 +839,10 @@ export function AiSuggestionsGrid({
         </div>
 
         <div className="flex items-center gap-2">
-          {selectedIds.length >= 2 && (
+          {hasRetailSales && selectedIds.length >= 2 && (
             <Button
               size="sm"
-              onClick={handleConsolidate}
+              onClick={handleConsolidateClick}
               className="h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs animate-in fade-in zoom-in"
             >
               <Combine className="h-3.5 w-3.5" />
@@ -825,7 +880,7 @@ export function AiSuggestionsGrid({
         <Table className="min-w-[1350px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
-              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
+              <TableHead colSpan={hasRetailSales ? 5 : 4} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
               <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
               <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
               <TableHead colSpan={2} className="text-center font-bold text-muted-foreground">RESUMEN</TableHead>
@@ -834,7 +889,9 @@ export function AiSuggestionsGrid({
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[160px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
               <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
-              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider text-center">Tipo</TableHead>
+              {hasRetailSales && (
+                <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider text-center">Tipo</TableHead>
+              )}
               <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
@@ -884,20 +941,22 @@ export function AiSuggestionsGrid({
                   className="h-8 text-sm w-full bg-background/90"
                 />
               </TableCell>
-              <TableCell className="p-2 align-middle text-center">
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('manual', 'es_insumo', !(manualItem.es_insumo ?? false))}
-                  className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
-                    (manualItem.es_insumo ?? false)
-                      ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
-                      : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
-                  }`}
-                  title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
-                >
-                  {(manualItem.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
-                </button>
-              </TableCell>
+              {hasRetailSales && (
+                <TableCell className="p-2 align-middle text-center">
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('manual', 'es_insumo', !(manualItem.es_insumo ?? false))}
+                    className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
+                      (manualItem.es_insumo ?? false)
+                        ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                        : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
+                    }`}
+                    title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
+                  >
+                    {(manualItem.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
+                  </button>
+                </TableCell>
+              )}
               <TableCell className="p-2 border-r">
                 <Input
                   type="number"
@@ -1069,7 +1128,7 @@ export function AiSuggestionsGrid({
             <TableFooter>
               {/* Fila 1: Productos Facturables */}
               <TableRow className="bg-emerald-50/10 font-semibold border-b">
-                <TableCell colSpan={5} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
+                <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totalesFacturables.costo)}</TableCell>
@@ -1087,7 +1146,7 @@ export function AiSuggestionsGrid({
               {/* Fila 2: Insumos / Costos Operativos */}
               {totalesInsumos.costo > 0 && (
                 <TableRow className="bg-red-50/10 font-semibold border-b">
-                  <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
+                  <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
                   <TableCell className="bg-red-50/20"></TableCell>
                   <TableCell className="bg-red-50/20"></TableCell>
                   <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700">{formatCLP(totalesInsumos.costo)}</TableCell>
@@ -1101,7 +1160,7 @@ export function AiSuggestionsGrid({
 
               {/* Fila 3: Gran Total / Utilidad Neta */}
               <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
-                <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
+                <TableCell colSpan={hasRetailSales ? 5 : 4} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
                 <TableCell className="bg-red-50/40"></TableCell>
                 <TableCell className="bg-red-50/40"></TableCell>
                 <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-base">{formatCLP(costoTotalGlobal)}</TableCell>
@@ -1123,6 +1182,13 @@ export function AiSuggestionsGrid({
           )}
         </Table>
       </div>
+
+      <ConsolidateDialog
+        open={consolidateOpen}
+        onOpenChange={setConsolidateOpen}
+        selectedItems={editableSuggestions.filter(s => selectedIds.includes(s.id!))}
+        onConsolidate={handlePerformConsolidate}
+      />
     </div>
   );
 }

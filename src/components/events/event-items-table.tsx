@@ -2,11 +2,12 @@
 
 import React, { useState } from 'react';
 import { EventItem } from '@/types';
-import { formatCLP, formatPercentage, calculateFinancials } from '@/lib/utils';
+import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFromTotal } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine } from 'lucide-react';
+import { ConsolidateDialog } from './consolidate-dialog';
 import {
   Table,
   TableBody,
@@ -22,13 +23,15 @@ interface EventItemsTableProps {
   onItemDeleted?: () => void;
   eventId: string;
   isCompleted?: boolean;
+  hasRetailSales?: boolean;
 }
 
-export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: EventItemsTableProps) {
+export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, hasRetailSales = false }: EventItemsTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
+  const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [localItems, setLocalItems] = useState<EventItem[]>(items);
   const supabase = createClient();
 
@@ -38,7 +41,30 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
 
   const handleQuantityChange = (id: string, newQty: string) => {
     const qty = parseInt(newQty) || 0;
-    setLocalItems(prev => prev.map(item => item.id === id ? { ...item, cantidad: qty } : item));
+    setLocalItems(prev => {
+      const target = prev.find(i => i.id === id);
+      if (!target) return prev;
+
+      // If parent item with children, recalculate unit cost dynamically!
+      const children = prev.filter(s => s.parent_id === id);
+      if (children.length > 0) {
+        const totalChildrenCost = children.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
+        const validQty = Math.max(1, qty);
+        const newUnitCost = Math.round(totalChildrenCost / validQty);
+        const fin = calculateFinancials(newUnitCost, target.ganancia, target.tipo_doc_costo || 'factura', target.iva_incluido ?? true, target.es_insumo ?? false);
+        return prev.map(item => item.id === id ? {
+          ...item,
+          cantidad: qty,
+          costo: newUnitCost,
+          valor_neto: fin.valorNeto,
+          iva: fin.ivaDebito,
+          valor_total: fin.valorTotal,
+          margen: fin.margen
+        } : item);
+      }
+
+      return prev.map(item => item.id === id ? { ...item, cantidad: qty } : item);
+    });
   };
 
   const handleQuantityBlur = async (id: string) => {
@@ -46,7 +72,14 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
     if (!item) return;
     try {
       const { error } = await (supabase.from('event_items') as any)
-        .update({ cantidad: item.cantidad })
+        .update({
+          cantidad: item.cantidad,
+          costo: item.costo,
+          valor_neto: item.valor_neto,
+          iva: item.iva,
+          valor_total: item.valor_total,
+          margen: item.margen
+        })
         .eq('id', id);
       if (error) throw error;
       if (onItemDeleted) onItemDeleted(); // Refresh parent items to update FloatingFinancialAdvisor
@@ -103,29 +136,43 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
     }
   };
 
-  const handleConsolidate = async () => {
+  const handleConsolidateClick = () => {
     if (selectedIds.length < 2) return;
-    
-    const name = window.prompt("Ingresa el nombre del producto consolidado (Ej: Piscolas (100 un)):");
-    if (!name || !name.trim()) return;
+    setConsolidateOpen(true);
+  };
 
+  const handlePerformConsolidate = async ({ name, quantity, unitPrice }: { name: string; quantity: number; unitPrice?: number }) => {
     const selectedItems = localItems.filter(s => selectedIds.includes(s.id!));
     const totalCost = selectedItems.reduce((acc, item) => acc + (item.costo * item.cantidad), 0);
-    const financials = calculateFinancials(totalCost, 0, 'factura');
+    const validQty = Math.max(1, quantity);
+    const realUnitCost = Math.round(totalCost / validQty);
+
+    let gananciaCalculada = 0;
+    let financials;
+    if (unitPrice && unitPrice > 0) {
+      const fin = calculateGananciaFromTotal(realUnitCost, unitPrice, 'factura', true, false);
+      gananciaCalculada = fin.ganancia;
+      financials = fin;
+    } else {
+      financials = calculateFinancials(realUnitCost, 0, 'factura', true, false);
+      gananciaCalculada = 0;
+    }
 
     const parentItem = {
       event_id: eventId,
       servicio: name.trim(),
-      detalle: 'Consolidado',
+      detalle: `Consolidado (${validQty} un)`,
       tipo_evento: 'Consolidado',
-      cantidad: 1,
-      costo: totalCost,
-      ganancia: 0,
+      cantidad: validQty,
+      costo: realUnitCost,
+      ganancia: gananciaCalculada,
       valor_neto: financials.valorNeto,
-      iva: financials.iva,
+      iva: financials.ivaDebito,
       valor_total: financials.valorTotal,
       margen: financials.margen,
       tipo_doc_costo: 'factura',
+      iva_incluido: true,
+      es_insumo: false,
       approved: true,
       parent_id: null
     };
@@ -139,14 +186,16 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
         
       if (insertError || !insertedParent) throw insertError || new Error("Failed to insert parent");
 
-      // 2. Update children to set parent_id, and reset their ganancia to 0 to prevent double margin if we want
+      // 2. Update children to set parent_id, es_insumo: true, ganancia: 0
       for (const child of selectedItems) {
-        const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura'); 
+        const childIvaIncluido = child.iva_incluido ?? true;
+        const childFinancials = calculateFinancials(child.costo, 0, child.tipo_doc_costo || 'factura', childIvaIncluido, true); 
         await (supabase.from('event_items') as any).update({ 
           parent_id: insertedParent.id,
+          es_insumo: true,
           ganancia: 0,
           valor_neto: childFinancials.valorNeto,
-          iva: childFinancials.iva,
+          iva: childFinancials.ivaDebito,
           valor_total: childFinancials.valorTotal,
           margen: childFinancials.margen
         }).eq('id', child.id);
@@ -162,6 +211,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
       } else {
         alert(`Hubo un error al consolidar los ítems: ${e?.message || "Error desconocido"}`);
       }
+      throw e;
     }
   };
 
@@ -254,21 +304,36 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
           {isCompleted ? (
             <span className="text-sm px-2">{item.cantidad}</span>
           ) : (
-            <Input
-              type="number"
-              value={item.cantidad || ''}
-              onChange={(e) => handleQuantityChange(item.id!, e.target.value)}
-              onBlur={() => handleQuantityBlur(item.id!)}
-              className="h-8 w-14 text-center px-1 text-sm"
-              min="1"
-            />
+            <div>
+              <Input
+                type="number"
+                value={item.cantidad || ''}
+                onChange={(e) => handleQuantityChange(item.id!, e.target.value)}
+                onBlur={() => handleQuantityBlur(item.id!)}
+                className="h-8 w-14 text-center px-1 text-sm font-semibold"
+                min="1"
+                title={hasChildren ? "Rendimiento / Unidades a la venta" : "Cantidad"}
+              />
+              {hasChildren && (
+                <span className="block text-[9px] text-primary/80 font-semibold text-center whitespace-nowrap mt-0.5">
+                  A la venta
+                </span>
+              )}
+            </div>
           )}
         </TableCell>
         
         {/* EGRESOS */}
         <TableCell className="p-2 bg-red-50/30">
           <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium">{formatCLP(item.costo)}</span>
+            <span className="text-sm font-medium" title={hasChildren ? "Costo unitario resultante (Total insumos ÷ Cantidad)" : "Costo unitario"}>
+              {formatCLP(item.costo)}
+            </span>
+            {hasChildren && (
+              <span className="text-[10px] text-red-700 font-semibold whitespace-nowrap" title="Costo total de insumos consolidados">
+                Total: {formatCLP(item.costo * item.cantidad)}
+              </span>
+            )}
             <span className={`text-[9px] px-1 py-0.5 rounded border font-bold uppercase tracking-wider text-center w-max ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-800 border-orange-200' : 'bg-blue-100 text-blue-800 border-blue-200'}`}>
               {item.tipo_doc_costo || 'factura'}
             </span>
@@ -361,11 +426,11 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
 
   return (
     <div className="space-y-3">
-      {!isCompleted && selectedIds.length >= 2 && (
+      {!isCompleted && hasRetailSales && selectedIds.length >= 2 && (
         <div className="flex justify-end">
           <Button
             size="sm"
-            onClick={handleConsolidate}
+            onClick={handleConsolidateClick}
             className="h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs animate-in fade-in zoom-in"
           >
             <Combine className="h-3.5 w-3.5" />
@@ -378,7 +443,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
         <Table className="min-w-[1350px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
-              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
+              <TableHead colSpan={hasRetailSales ? 5 : 4} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
               <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
               <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
               <TableHead colSpan={isCompleted ? 2 : 3} className="text-center font-bold text-muted-foreground">RESUMEN Y GESTIÓN</TableHead>
@@ -387,7 +452,9 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[160px] text-xs font-bold uppercase tracking-wider">Servicio</TableHead>
               <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
-              <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">Tipo</TableHead>
+              {hasRetailSales && (
+                <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">Tipo</TableHead>
+              )}
               <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
@@ -422,7 +489,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
           <TableFooter>
             {/* Fila 1: Productos Facturables */}
             <TableRow className="bg-emerald-50/10 font-semibold border-b">
-              <TableCell colSpan={5} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
+              <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
               <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totalesFacturables.costo)}</TableCell>
@@ -440,7 +507,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
             {/* Fila 2: Insumos / Costos Operativos */}
             {totalesInsumos.costo > 0 && (
               <TableRow className="bg-red-50/10 font-semibold border-b">
-                <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
+                <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700">{formatCLP(totalesInsumos.costo)}</TableCell>
@@ -454,7 +521,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
 
             {/* Fila 3: Gran Total / Utilidad Neta */}
             <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
-              <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
+              <TableCell colSpan={hasRetailSales ? 5 : 4} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
               <TableCell className="bg-red-50/40"></TableCell>
               <TableCell className="bg-red-50/40"></TableCell>
               <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-base">{formatCLP(costoTotalGlobal)}</TableCell>
@@ -475,6 +542,13 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted }: 
           </TableFooter>
         </Table>
       </div>
+
+      <ConsolidateDialog
+        open={consolidateOpen}
+        onOpenChange={setConsolidateOpen}
+        selectedItems={localItems.filter(s => selectedIds.includes(s.id!))}
+        onConsolidate={handlePerformConsolidate}
+      />
     </div>
   );
 }

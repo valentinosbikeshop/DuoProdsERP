@@ -27,7 +27,8 @@ import {
   ArrowLeft,
   Wand2,
   FileSpreadsheet,
-  ClipboardList
+  ClipboardList,
+  Store
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -301,6 +302,12 @@ export default function EventDetailPage() {
             <Badge className={EVENT_STATUS_COLORS[event.status as keyof typeof EVENT_STATUS_COLORS]}>
               {EVENT_STATUS_LABELS[event.status as keyof typeof EVENT_STATUS_LABELS] || event.status}
             </Badge>
+            {event.has_retail_sales && (
+              <Badge variant="outline" className="border-indigo-300 text-indigo-700 bg-indigo-50 font-medium">
+                <Store className="mr-1 h-3 w-3" />
+                Venta al por Menor
+              </Badge>
+            )}
             {isCompleted && (
               <Badge variant="outline" className="border-green-600 text-green-600 bg-green-50">
                 <CheckCircle className="mr-1 h-3 w-3" />
@@ -431,16 +438,20 @@ export default function EventDetailPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
                       <Sparkles className="h-3.5 w-3.5 text-primary" />
-                      <span>Desglose Específico con IA (Requerimiento Puntual)</span>
+                      <span>{event.has_retail_sales ? 'Desglose Específico con IA (Recetas / Barra / Insumos)' : 'Desglose Específico con IA (Equipamiento / Servicios)'}</span>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Escribe un pedido o menú para que la IA calcule automáticamente los ingredientes, insumos, cantidades y costos:
+                      {event.has_retail_sales 
+                        ? 'Escribe un pedido o menú para que la IA calcule automáticamente los ingredientes, insumos, cantidades y costos:' 
+                        : 'Escribe requerimientos técnicos específicos para que la IA sugiera el desglose de equipos, servicios y personal:'}
                     </p>
                     <textarea
                       rows={2}
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
-                      placeholder="Ej: 50 empanadas de pino sin aceituna, 30 empanadas napolitanas, 20 litros de chicha y 2 parrilleros por 5 horas..."
+                      placeholder={event.has_retail_sales 
+                        ? "Ej: 50 empanadas de pino sin aceituna, 30 empanadas napolitanas, 20 litros de chicha y 2 parrilleros por 5 horas..."
+                        : "Ej: Iluminación perimetral con 12 focos LED, sistema de sonido para 300 personas, 2 pantallas de apoyo y 1 operador técnico por 8 horas..."}
                       className="w-full rounded-xl border border-input/80 bg-background/80 px-3.5 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 custom-scrollbar resize-none font-normal shadow-2xs"
                       disabled={customAiLoading || isCompleted}
                       onKeyDown={(e) => {
@@ -516,6 +527,7 @@ export default function EventDetailPage() {
                 draftItems={draftItems} 
                 eventId={id} 
                 onDraftChanged={fetchEventData}
+                hasRetailSales={event.has_retail_sales ?? false}
               />
             </CardContent>
           </Card>
@@ -537,6 +549,7 @@ export default function EventDetailPage() {
                 onItemDeleted={fetchEventData} 
                 isCompleted={isCompleted}
                 eventId={id}
+                hasRetailSales={event.has_retail_sales ?? false}
               />
             </CardContent>
           </Card>
