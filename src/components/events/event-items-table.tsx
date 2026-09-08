@@ -6,7 +6,7 @@ import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFrom
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine, Split, GitFork } from 'lucide-react';
+import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine, Split, GitFork, X, Sparkles } from 'lucide-react';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
 import {
@@ -31,6 +31,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [consolidationName, setConsolidationName] = useState('');
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
   const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [distributeOpen, setDistributeOpen] = useState(false);
@@ -481,6 +482,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
       }
       
       setSelectedIds([]);
+      setConsolidationName('');
       setExpandedParents(prev => [...prev, insertedParent.id]);
       if (onItemDeleted) onItemDeleted(); // Refresh items
     } catch (e: any) {
@@ -856,8 +858,12 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
 
       <ConsolidateDialog
         open={consolidateOpen}
-        onOpenChange={setConsolidateOpen}
+        onOpenChange={(isOpen) => {
+          setConsolidateOpen(isOpen);
+          if (!isOpen) setConsolidationName('');
+        }}
         selectedItems={localItems.filter(s => selectedIds.includes(s.id!))}
+        initialName={consolidationName}
         onConsolidate={handlePerformConsolidate}
       />
 
@@ -868,6 +874,62 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
         consolidatedItems={localItems.filter(item => !item.parent_id && (item.tipo_evento?.toLowerCase() === 'consolidado' || localItems.some(c => c.parent_id === item.id)))}
         onDistribute={handlePerformDistribute}
       />
+
+      {/* Barra flotante para consolidación rápida y directa */}
+      {!isCompleted && selectedIds.length >= 2 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 sm:gap-3 px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl bg-card/95 backdrop-blur-xl border border-primary/40 shadow-2xl shadow-black/30 animate-in slide-in-from-bottom-5 duration-300 ring-1 ring-primary/20">
+          <div className="flex items-center gap-2 pl-1 pr-2 border-r border-border/60 shrink-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 font-bold text-xs shadow-2xs">
+              {selectedIds.length}
+            </div>
+            <div className="hidden sm:block">
+              <span className="text-xs font-bold text-foreground block leading-tight">Ítems elegidos</span>
+              <span className="text-[10px] text-muted-foreground block leading-tight">Para consolidar</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Input
+              type="text"
+              placeholder="Nombre del consolidado (ej. Piscolas)..."
+              value={consolidationName}
+              onChange={(e) => setConsolidationName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleConsolidateClick();
+                }
+              }}
+              className="h-9 w-44 sm:w-64 bg-background/90 text-xs sm:text-sm font-medium rounded-xl border-border/80 focus-visible:ring-primary/40 shadow-2xs"
+              autoFocus
+            />
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConsolidateClick}
+              className="h-9 px-3.5 sm:px-4 text-xs sm:text-sm font-bold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shrink-0 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            >
+              <Combine className="h-4 w-4" />
+              <span>Consolidar</span>
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setSelectedIds([]);
+                setConsolidationName('');
+              }}
+              className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted/80 rounded-xl shrink-0"
+              title="Deseleccionar todos"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

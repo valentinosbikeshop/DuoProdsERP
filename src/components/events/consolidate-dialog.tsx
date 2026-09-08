@@ -19,6 +19,7 @@ interface ConsolidateDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedItems: EventItem[];
+  initialName?: string;
   onConsolidate: (params: {
     name: string;
     quantity: number;
@@ -31,9 +32,10 @@ export function ConsolidateDialog({
   open,
   onOpenChange,
   selectedItems,
+  initialName = '',
   onConsolidate,
 }: ConsolidateDialogProps) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialName || '');
   const [quantity, setQuantity] = useState<number>(100);
   const [unitPrice, setUnitPrice] = useState<string>('');
   const [assignedQuantities, setAssignedQuantities] = useState<Record<string, number>>({});
@@ -42,7 +44,7 @@ export function ConsolidateDialog({
 
   useEffect(() => {
     if (open) {
-      setName('');
+      setName(initialName || '');
       setQuantity(100);
       setUnitPrice('');
       setError(null);
@@ -54,7 +56,7 @@ export function ConsolidateDialog({
       });
       setAssignedQuantities(initial);
     }
-  }, [open, selectedItems]);
+  }, [open, selectedItems, initialName]);
 
   const totalCost = selectedItems.reduce((acc, item) => {
     const qty = item.id && assignedQuantities[item.id] !== undefined
@@ -209,7 +211,7 @@ export function ConsolidateDialog({
                 placeholder="Ej: Terremotos (Vaso 400cc), Piscola, Hamburguesa"
                 className="rounded-xl"
                 required
-                autoFocus
+                autoFocus={!initialName}
               />
             </div>
 
@@ -227,6 +229,7 @@ export function ConsolidateDialog({
                   placeholder="Ej: 100"
                   className="rounded-xl font-bold"
                   required
+                  autoFocus={!!initialName}
                 />
                 <p className="text-[11px] text-muted-foreground">
                   ¿Cuántas porciones o unidades resultan de estos insumos?
