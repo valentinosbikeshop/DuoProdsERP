@@ -16,8 +16,9 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split } from 'lucide-react';
+import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork } from 'lucide-react';
 import { ConsolidateDialog } from './consolidate-dialog';
+import { DistributeInsumoDialog } from './distribute-insumo-dialog';
 
 interface AiSuggestionsGridProps {
   draftItems?: EventItem[];
@@ -56,6 +57,8 @@ export function AiSuggestionsGrid({
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dragOverParentId, setDragOverParentId] = useState<string | null>(null);
   const [consolidateOpen, setConsolidateOpen] = useState(false);
+  const [distributeOpen, setDistributeOpen] = useState(false);
+  const [distributeItem, setDistributeItem] = useState<EventItem | null>(null);
   const supabase = createClient();
   
   useEffect(() => {
@@ -452,6 +455,144 @@ export function AiSuggestionsGrid({
     setConsolidateOpen(true);
   };
 
+  const handleOpenDistribute = (item: EventItem) => {
+    setDistributeItem(item);
+    setDistributeOpen(true);
+  };
+
+  const handlePerformDistribute = async ({
+    consolidatedDistributions,
+    standaloneSplitQty,
+  }: {
+    consolidatedDistributions: Record<string, number>;
+    standaloneSplitQty: number;
+  }) => {
+    if (!distributeItem) return;
+
+    const originalBase = distributeItem.cantidad_original || distributeItem.cantidad;
+    const itemIvaIncluido = distributeItem.iva_incluido ?? true;
+    let totalAssigned = 0;
+
+    try {
+      // 1. Process assignments to consolidated parents in draft
+      for (const [parentId, qty] of Object.entries(consolidatedDistributions)) {
+        if (!qty || qty <= 0) continue;
+        totalAssigned += qty;
+
+        const childFin = calculateFinancials(distributeItem.costo, 0, distributeItem.tipo_doc_costo || 'factura', itemIvaIncluido, true);
+        const childItem = {
+          event_id: eventId,
+          servicio: distributeItem.servicio,
+          detalle: `Porción derivada (${qty} de ${originalBase} un)`,
+          tipo_evento: distributeItem.tipo_evento,
+          cantidad: qty,
+          costo: distributeItem.costo,
+          ganancia: 0,
+          valor_neto: childFin.valorNeto,
+          iva: childFin.ivaDebito,
+          valor_total: childFin.valorTotal,
+          margen: childFin.margen,
+          tipo_doc_costo: distributeItem.tipo_doc_costo || 'factura',
+          factura_url: distributeItem.factura_url,
+          iva_incluido: itemIvaIncluido,
+          es_insumo: true,
+          approved: false,
+          parent_id: parentId,
+          source_item_id: distributeItem.id,
+          cantidad_original: originalBase,
+        };
+
+        const { error: childErr } = await (supabase.from('event_items') as any).insert(childItem);
+        if (childErr && (childErr.message?.includes('source_item_id') || childErr.code === 'PGRST204')) {
+          const { source_item_id: _, cantidad_original: __, ...fallbackChild } = childItem;
+          await (supabase.from('event_items') as any).insert(fallbackChild);
+        }
+
+        // Recalculate parent's unit cost dynamically
+        const parent = editableSuggestions.find(p => p.id === parentId);
+        if (parent) {
+          const existingChildren = editableSuggestions.filter(c => c.parent_id === parentId);
+          const existingChildrenCost = existingChildren.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
+          const newTotalChildrenCost = existingChildrenCost + (qty * distributeItem.costo);
+          const newParentUnitCost = Math.round(newTotalChildrenCost / Math.max(1, parent.cantidad));
+
+          let parentGanancia = parent.ganancia;
+          let parentFinancials;
+          if (parent.valor_total && parent.valor_total > 0) {
+            const fin = calculateGananciaFromTotal(newParentUnitCost, parent.valor_total, parent.tipo_doc_costo || 'factura', parent.iva_incluido ?? true, false);
+            parentGanancia = fin.ganancia;
+            parentFinancials = fin;
+          } else {
+            parentFinancials = calculateFinancials(newParentUnitCost, parent.ganancia, parent.tipo_doc_costo || 'factura', parent.iva_incluido ?? true, false);
+          }
+
+          await (supabase.from('event_items') as any).update({
+            costo: newParentUnitCost,
+            ganancia: parentGanancia,
+            valor_neto: parentFinancials.valorNeto,
+            iva: parentFinancials.ivaDebito,
+            valor_total: parentFinancials.valorTotal,
+            margen: parentFinancials.margen,
+          }).eq('id', parentId);
+        }
+      }
+
+      // 2. Process standalone split if any
+      if (standaloneSplitQty > 0) {
+        totalAssigned += standaloneSplitQty;
+        const splitFin = calculateFinancials(distributeItem.costo, distributeItem.ganancia, distributeItem.tipo_doc_costo || 'factura', itemIvaIncluido, distributeItem.es_insumo ?? true);
+        const newSplitItem = {
+          event_id: eventId,
+          servicio: distributeItem.servicio,
+          detalle: `Separado de compra (${standaloneSplitQty} de ${originalBase} un)`,
+          tipo_evento: distributeItem.tipo_evento,
+          cantidad: standaloneSplitQty,
+          costo: distributeItem.costo,
+          ganancia: distributeItem.ganancia,
+          valor_neto: splitFin.valorNeto,
+          iva: splitFin.ivaDebito,
+          valor_total: splitFin.valorTotal,
+          margen: splitFin.margen,
+          tipo_doc_costo: distributeItem.tipo_doc_costo || 'factura',
+          factura_url: distributeItem.factura_url,
+          iva_incluido: itemIvaIncluido,
+          es_insumo: distributeItem.es_insumo ?? true,
+          approved: false,
+          parent_id: null,
+          source_item_id: distributeItem.id,
+          cantidad_original: originalBase,
+        };
+
+        const { error: splitErr } = await (supabase.from('event_items') as any).insert(newSplitItem);
+        if (splitErr && (splitErr.message?.includes('source_item_id') || splitErr.code === 'PGRST204')) {
+          const { source_item_id: _, cantidad_original: __, ...fallbackSplit } = newSplitItem;
+          await (supabase.from('event_items') as any).insert(fallbackSplit);
+        }
+      }
+
+      // 3. Update original item remaining quantity
+      const remainingQty = Math.max(0, distributeItem.cantidad - totalAssigned);
+      const updateData: any = {
+        cantidad: remainingQty,
+        cantidad_original: originalBase,
+        detalle: distributeItem.detalle
+          ? `${distributeItem.detalle} (${remainingQty} restantes)`
+          : `Compra original (${remainingQty} restantes de ${originalBase})`,
+      };
+
+      const { error: updateErr } = await (supabase.from('event_items') as any).update(updateData).eq('id', distributeItem.id);
+      if (updateErr && (updateErr.message?.includes('cantidad_original') || updateErr.code === 'PGRST204')) {
+        delete updateData.cantidad_original;
+        await (supabase.from('event_items') as any).update(updateData).eq('id', distributeItem.id);
+      }
+
+      if (onDraftChanged) onDraftChanged();
+    } catch (err: any) {
+      console.error('Error distributing item in draft:', err);
+      alert('Error al derivar el insumo: ' + err.message);
+    }
+  };
+
   const handleSplitItem = async (item: EventItem) => {
     if (!item.cantidad || item.cantidad <= 1) return;
     const promptVal = window.prompt(
@@ -808,14 +949,14 @@ export function AiSuggestionsGrid({
           </TableCell>
         )}
         <TableCell className="p-2 border-r">
-          <div className="flex items-center gap-1">
-            <div className="flex-1">
+          <div className="flex items-center gap-1.5 justify-center">
+            <div className="relative">
               <Input
                 type="number"
                 value={item.cantidad}
                 onChange={(e) => handleInputChange(item.id!, 'cantidad', e.target.value)}
                 onBlur={(e) => handleBlur(item.id!, e)}
-                className="h-8 text-sm w-full text-center px-1 font-semibold"
+                className="h-8 w-14 text-center px-1 text-sm font-bold bg-background shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 min="1"
                 title={hasChildren ? "Rendimiento / Unidades a la venta" : "Cantidad"}
               />
@@ -827,13 +968,14 @@ export function AiSuggestionsGrid({
             </div>
             {!isChild && !hasChildren && (item.cantidad || 0) > 1 && (
               <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-muted/80 shrink-0"
-                onClick={() => handleSplitItem(item)}
-                title="Dividir / Fraccionar unidades de esta compra"
+                size="sm"
+                variant="outline"
+                className="h-7 px-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border-indigo-200 gap-1 shrink-0 shadow-2xs"
+                onClick={() => handleOpenDistribute(item)}
+                title="Derivar / Distribuir unidades a consolidados (recetas)"
               >
-                <Split className="h-3.5 w-3.5" />
+                <GitFork className="h-3 w-3" />
+                <span className="hidden xl:inline">Derivar</span>
               </Button>
             )}
           </div>
@@ -1054,12 +1196,12 @@ export function AiSuggestionsGrid({
             </TableRow>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-[40px]"></TableHead>
-              <TableHead className="min-w-[160px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
+              <TableHead className="min-w-[280px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
               <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
               {hasRetailSales && (
                 <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider text-center">Tipo</TableHead>
               )}
-              <TableHead className="w-[70px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
+              <TableHead className="w-[135px] min-w-[135px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
               <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">IVA Crédito</TableHead>
@@ -1355,6 +1497,14 @@ export function AiSuggestionsGrid({
         onOpenChange={setConsolidateOpen}
         selectedItems={editableSuggestions.filter(s => selectedIds.includes(s.id!))}
         onConsolidate={handlePerformConsolidate}
+      />
+
+      <DistributeInsumoDialog
+        open={distributeOpen}
+        onOpenChange={setDistributeOpen}
+        sourceItem={distributeItem}
+        consolidatedItems={editableSuggestions.filter(item => !item.parent_id && item.tipo_evento === 'Consolidado')}
+        onDistribute={handlePerformDistribute}
       />
     </div>
   );
