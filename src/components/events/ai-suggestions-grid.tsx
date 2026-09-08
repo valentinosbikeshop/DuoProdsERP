@@ -1503,7 +1503,7 @@ export function AiSuggestionsGrid({
         open={distributeOpen}
         onOpenChange={setDistributeOpen}
         sourceItem={distributeItem}
-        consolidatedItems={editableSuggestions.filter(item => !item.parent_id && item.tipo_evento === 'Consolidado')}
+        consolidatedItems={editableSuggestions.filter(item => !item.parent_id && (item.tipo_evento?.toLowerCase() === 'consolidado' || editableSuggestions.some(c => c.parent_id === item.id)))}
         onDistribute={handlePerformDistribute}
       />
     </div>

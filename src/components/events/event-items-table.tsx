@@ -865,7 +865,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
         open={distributeOpen}
         onOpenChange={setDistributeOpen}
         sourceItem={distributeItem}
-        consolidatedItems={localItems.filter(item => !item.parent_id && item.tipo_evento === 'Consolidado')}
+        consolidatedItems={localItems.filter(item => !item.parent_id && (item.tipo_evento?.toLowerCase() === 'consolidado' || localItems.some(c => c.parent_id === item.id)))}
         onDistribute={handlePerformDistribute}
       />
     </div>
