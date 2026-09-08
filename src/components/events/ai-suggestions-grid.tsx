@@ -16,7 +16,8 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork } from 'lucide-react';
+import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork, GripVertical } from 'lucide-react';
+import { useDragAutoScroll } from '@/hooks/use-drag-auto-scroll';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
 
@@ -62,6 +63,8 @@ export function AiSuggestionsGrid({
   const [distributeItem, setDistributeItem] = useState<EventItem | null>(null);
   const supabase = createClient();
   
+  useDragAutoScroll({ isDragging: !!draggedItemId });
+
   useEffect(() => {
     setEditableSuggestions(draftItems);
   }, [draftItems]);
@@ -352,6 +355,13 @@ export function AiSuggestionsGrid({
     if (!draggedItem || !targetParent) return;
     if (draggedItem.tipo_evento === 'Consolidado') {
       alert("No se pueden arrastrar ítems consolidados dentro de otros.");
+      return;
+    }
+
+    const isTargetConsolidated = targetParent.tipo_evento?.toLowerCase() === 'consolidado' || editableSuggestions.some(s => s.parent_id === targetParentId);
+    if (!isTargetConsolidated) {
+      setSelectedIds([draggedId, targetParentId]);
+      setConsolidateOpen(true);
       return;
     }
     
@@ -851,45 +861,77 @@ export function AiSuggestionsGrid({
     const hasChildren = editableSuggestions.some(s => s.parent_id === item.id);
     const isExpanded = expandedParents.includes(item.id!);
 
+    const isTarget = dragOverParentId === item.id;
+    const isDragged = draggedItemId === item.id;
+    const isConsolidated = hasChildren || item.tipo_evento?.toLowerCase() === 'consolidado';
+
     return (
       <TableRow 
-          key={item.id} 
-          className={`hover:bg-muted/30 transition-colors ${isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''} ${dragOverParentId === item.id ? 'border-2 border-blue-500 bg-blue-50/50' : ''}`}
-          draggable={true}
-          onDragStart={(e) => {
-            setDraggedItemId(item.id!);
-            e.dataTransfer.effectAllowed = "move";
-          }}
-          onDragOver={(e) => {
-            if (item.tipo_evento === 'Consolidado' && draggedItemId !== item.id) {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = "move";
+        key={item.id} 
+        draggable={!isChild}
+        onDragStart={(e) => {
+          if (isChild) return;
+          setDraggedItemId(item.id!);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData('text/plain', item.id!);
+        }}
+        onDragOver={(e) => {
+          if (draggedItemId && draggedItemId !== item.id && !isChild) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (dragOverParentId !== item.id) {
               setDragOverParentId(item.id!);
             }
-          }}
-          onDragLeave={() => {
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
             if (dragOverParentId === item.id) setDragOverParentId(null);
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOverParentId(null);
-            if (item.tipo_evento === 'Consolidado' && draggedItemId) {
-              handleDropItem(draggedItemId, item.id!);
-            }
-            setDraggedItemId(null);
-          }}
-        >
+          }
+        }}
+        onDragEnd={() => {
+          setDraggedItemId(null);
+          setDragOverParentId(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOverParentId(null);
+          if (draggedItemId && draggedItemId !== item.id) {
+            handleDropItem(draggedItemId, item.id!);
+          }
+          setDraggedItemId(null);
+        }}
+        className={`transition-all ${
+          isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''
+        } ${
+          isDragged ? 'opacity-30 border-dashed border-primary/50 bg-primary/5 scale-[0.99]' : ''
+        } ${
+          isTarget
+            ? isConsolidated
+              ? 'ring-2 ring-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 shadow-lg scale-[1.008] z-20 relative'
+              : 'ring-2 ring-blue-500 bg-blue-50/80 dark:bg-blue-950/60 shadow-lg scale-[1.008] z-20 relative'
+            : ''
+        }`}
+      >
         {!isChild ? (
-          <TableCell className="p-2 text-center w-[40px]">
-             <input 
-               type="checkbox" 
-               checked={isSelected} 
-               onChange={() => toggleSelect(item.id!)}
-               className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-             />
+          <TableCell className="p-2 text-center w-[50px]">
+            <div className="flex items-center justify-center gap-1">
+              <span 
+                className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-foreground transition-colors rounded hover:bg-muted/60"
+                title="Arrastrar para consolidar con otro ítem"
+              >
+                <GripVertical className="h-3.5 w-3.5" />
+              </span>
+              <input 
+                type="checkbox" 
+                checked={isSelected} 
+                onChange={() => toggleSelect(item.id!)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+              />
+            </div>
           </TableCell>
         ) : (
-          <TableCell className="w-[40px]"></TableCell>
+          <TableCell className="w-[10px]"></TableCell>
         )}
         
         <TableCell className="p-2">
@@ -903,13 +945,21 @@ export function AiSuggestionsGrid({
             {isChild && <div className="w-4 h-px bg-border ml-2 mr-1 flex-shrink-0"></div>}
             
             <div className="flex-1 flex flex-col">
-              <Input
-                value={item.servicio}
-                onChange={(e) => handleInputChange(item.id!, 'servicio', e.target.value)}
-                onBlur={(e) => handleBlur(item.id!, e)}
-                className={`h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all ${!isChild ? 'font-semibold' : 'font-medium text-muted-foreground'}`}
-                readOnly={hasChildren && !isExpanded} 
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  value={item.servicio}
+                  onChange={(e) => handleInputChange(item.id!, 'servicio', e.target.value)}
+                  onBlur={(e) => handleBlur(item.id!, e)}
+                  className={`h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all ${!isChild ? 'font-semibold' : 'font-medium text-muted-foreground'}`}
+                  readOnly={hasChildren && !isExpanded} 
+                />
+                {isTarget && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs inline-flex items-center gap-1 animate-pulse shrink-0 whitespace-nowrap">
+                    <Combine className="h-3 w-3" />
+                    {isConsolidated ? `Sumar a ${item.servicio}` : `Consolidar con ${item.servicio}`}
+                  </span>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-1 px-1">
                 {item.source_item_id && (
                   <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-medium" title="Fracción asignada desde una compra facturada">

@@ -6,7 +6,8 @@ import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFrom
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine, Split, GitFork, X, Sparkles } from 'lucide-react';
+import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine, Split, GitFork, X, Sparkles, GripVertical } from 'lucide-react';
+import { useDragAutoScroll } from '@/hooks/use-drag-auto-scroll';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
 import {
@@ -33,11 +34,15 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [consolidationName, setConsolidationName] = useState('');
   const [expandedParents, setExpandedParents] = useState<string[]>([]);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
+  const [dragOverTargetId, setDragOverTargetId] = useState<string | null>(null);
   const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [distributeOpen, setDistributeOpen] = useState(false);
   const [distributeItem, setDistributeItem] = useState<EventItem | null>(null);
   const [localItems, setLocalItems] = useState<EventItem[]>(items);
   const supabase = createClient();
+
+  useDragAutoScroll({ isDragging: !!draggedItemId });
 
   React.useEffect(() => {
     setLocalItems(items);
@@ -143,6 +148,87 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
   const handleConsolidateClick = () => {
     if (selectedIds.length < 2) return;
     setConsolidateOpen(true);
+  };
+
+  const handleDropItem = async (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+
+    const draggedItem = localItems.find(s => s.id === draggedId);
+    const targetItem = localItems.find(s => s.id === targetId);
+    if (!draggedItem || !targetItem) return;
+
+    if (draggedItem.tipo_evento?.toLowerCase() === 'consolidado') {
+      alert("No se pueden arrastrar productos consolidados dentro de otros.");
+      return;
+    }
+
+    const isTargetConsolidated = targetItem.tipo_evento?.toLowerCase() === 'consolidado' || localItems.some(c => c.parent_id === targetId);
+
+    if (isTargetConsolidated) {
+      if (draggedItem.parent_id === targetId) return;
+
+      try {
+        const { error } = await (supabase.from('event_items') as any)
+          .update({ parent_id: targetId, es_insumo: true })
+          .eq('id', draggedId);
+
+        if (error) throw error;
+
+        // Recalculate parent's unit cost dynamically
+        const targetSiblings = localItems.filter(s => s.parent_id === targetId && s.id !== draggedId);
+        const newTotalChildrenCost = targetSiblings.reduce((acc, c) => acc + (c.costo * c.cantidad), 0) + (draggedItem.costo * draggedItem.cantidad);
+        const targetQty = Math.max(1, targetItem.cantidad || 1);
+        const newTargetUnitCost = Math.round(newTotalChildrenCost / targetQty);
+
+        let targetGanancia = targetItem.ganancia;
+        let targetFinancials;
+        if (targetItem.valor_total && targetItem.valor_total > 0) {
+          const fin = calculateGananciaFromTotal(newTargetUnitCost, targetItem.valor_total, targetItem.tipo_doc_costo || 'factura', targetItem.iva_incluido ?? true, false);
+          targetGanancia = fin.ganancia;
+          targetFinancials = fin;
+        } else {
+          targetFinancials = calculateFinancials(newTargetUnitCost, targetItem.ganancia, targetItem.tipo_doc_costo || 'factura', targetItem.iva_incluido ?? true, false);
+        }
+
+        await (supabase.from('event_items') as any).update({
+          costo: newTargetUnitCost,
+          ganancia: targetGanancia,
+          valor_neto: targetFinancials.valorNeto,
+          iva: targetFinancials.ivaDebito,
+          valor_total: targetFinancials.valorTotal,
+          margen: targetFinancials.margen,
+        }).eq('id', targetId);
+
+        // If dragged item had an old parent, update old parent too
+        if (draggedItem.parent_id) {
+          const oldParentId = draggedItem.parent_id;
+          const oldParent = localItems.find(s => s.id === oldParentId);
+          if (oldParent) {
+            const oldSiblings = localItems.filter(s => s.parent_id === oldParentId && s.id !== draggedId);
+            const oldCost = oldSiblings.reduce((acc, c) => acc + (c.costo * c.cantidad), 0);
+            const oldQty = Math.max(1, oldParent.cantidad || 1);
+            const oldUnitCost = Math.round(oldCost / oldQty);
+            const oldFin = calculateFinancials(oldUnitCost, oldParent.ganancia, oldParent.tipo_doc_costo || 'factura', oldParent.iva_incluido ?? true, false);
+            await (supabase.from('event_items') as any).update({
+              costo: oldUnitCost,
+              valor_neto: oldFin.valorNeto,
+              iva: oldFin.ivaDebito,
+              valor_total: oldFin.valorTotal,
+              margen: oldFin.margen,
+            }).eq('id', oldParentId);
+          }
+        }
+
+        if (onItemDeleted) onItemDeleted();
+      } catch (err: any) {
+        console.error('Error dropping item:', err);
+        alert('Error al consolidar ítem: ' + err.message);
+      }
+    } else {
+      // Target is regular: select both items and open consolidation dialog
+      setSelectedIds([draggedId, targetId]);
+      setConsolidateOpen(true);
+    }
   };
 
   const handleOpenDistribute = (item: EventItem) => {
@@ -549,17 +635,75 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
     const hasChildren = localItems.some(s => s.parent_id === item.id);
     const isExpanded = expandedParents.includes(item.id!);
 
+    const isTarget = dragOverTargetId === item.id;
+    const isDragged = draggedItemId === item.id;
+    const isConsolidated = hasChildren || item.tipo_evento?.toLowerCase() === 'consolidado';
+
     return (
-      <TableRow key={item.id} className={`${isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''}`}>
+      <TableRow 
+        key={item.id} 
+        draggable={!isCompleted && !isChild}
+        onDragStart={(e) => {
+          if (isCompleted || isChild) return;
+          setDraggedItemId(item.id!);
+          e.dataTransfer.effectAllowed = "move";
+          e.dataTransfer.setData('text/plain', item.id!);
+        }}
+        onDragOver={(e) => {
+          if (draggedItemId && draggedItemId !== item.id && !isChild) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (dragOverTargetId !== item.id) {
+              setDragOverTargetId(item.id!);
+            }
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            if (dragOverTargetId === item.id) setDragOverTargetId(null);
+          }
+        }}
+        onDragEnd={() => {
+          setDraggedItemId(null);
+          setDragOverTargetId(null);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOverTargetId(null);
+          if (draggedItemId && draggedItemId !== item.id) {
+            handleDropItem(draggedItemId, item.id!);
+          }
+          setDraggedItemId(null);
+        }}
+        className={`transition-all ${
+          isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''
+        } ${
+          isDragged ? 'opacity-30 border-dashed border-primary/50 bg-primary/5 scale-[0.99]' : ''
+        } ${
+          isTarget
+            ? isConsolidated
+              ? 'ring-2 ring-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 shadow-lg scale-[1.008] z-20 relative'
+              : 'ring-2 ring-blue-500 bg-blue-50/80 dark:bg-blue-950/60 shadow-lg scale-[1.008] z-20 relative'
+            : ''
+        }`}
+      >
         {!isCompleted ? (
-          <TableCell className="w-[40px] text-center p-2">
+          <TableCell className="w-[50px] text-center p-2">
             {!isChild && (
-              <input 
-                type="checkbox" 
-                checked={isSelected} 
-                onChange={() => toggleSelect(item.id!)}
-                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-              />
+              <div className="flex items-center justify-center gap-1">
+                <span 
+                  className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-foreground transition-colors rounded hover:bg-muted/60"
+                  title="Arrastrar para consolidar con otro ítem"
+                >
+                  <GripVertical className="h-3.5 w-3.5" />
+                </span>
+                <input 
+                  type="checkbox" 
+                  checked={isSelected} 
+                  onChange={() => toggleSelect(item.id!)}
+                  className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                />
+              </div>
             )}
           </TableCell>
         ) : (
@@ -578,6 +722,12 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
             
             <div className="flex flex-wrap items-center gap-1.5">
               <span className={isChild ? 'text-muted-foreground font-normal text-sm' : 'text-sm'}>{item.servicio}</span>
+              {isTarget && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white shadow-xs inline-flex items-center gap-1 animate-pulse shrink-0">
+                  <Combine className="h-3 w-3" />
+                  {isConsolidated ? `Sumar a ${item.servicio}` : `Consolidar con ${item.servicio}`}
+                </span>
+              )}
               {item.source_item_id && (
                 <span className="text-[10px] text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded font-medium shrink-0" title="Fracción asignada desde una compra facturada">
                   De Compra Facturada
