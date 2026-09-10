@@ -101,12 +101,13 @@ Tu respuesta 'reply' debe ser amigable y resumir brevemente lo que hiciste (ej. 
        formattedMessages[formattedMessages.length - 1].parts.push({ text: `\n[Archivo adjunto]:\n${fileText}` });
     }
 
-    const modelsToTry = ['gemini-2.5-pro', 'gemini-3.7-flash', 'gemini-2.5-flash'];
-    let response;
+    const modelsToTry = ['gemini-3.1-pro', 'gemini-3.6-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-flash'];
+    let responseText = null;
+    let lastError = null;
     
     for (const model of modelsToTry) {
         try {
-            response = await ai.models.generateContent({
+            const response = await ai.models.generateContent({
                 model,
                 contents: formattedMessages,
                 config: {
@@ -116,18 +117,23 @@ Tu respuesta 'reply' debe ser amigable y resumir brevemente lo que hiciste (ej. 
                     temperature: 0.1,
                 }
             });
-            break;
+            if (response && response.text) {
+                // Verificar que sea JSON válido
+                JSON.parse(response.text);
+                responseText = response.text;
+                break;
+            }
         } catch (e: any) {
-            console.error(`Error con modelo ${model}:`, e);
-            if (!e.message?.includes('503')) throw e;
+            console.error(`Error con modelo ${model}:`, e.message || e);
+            lastError = e;
         }
     }
 
-    if (!response || !response.text) {
-      throw new Error('No hubo respuesta de la IA');
+    if (!responseText) {
+      throw new Error(lastError?.message || 'No hubo respuesta válida de la IA tras varios intentos');
     }
 
-    const parsedData = JSON.parse(response.text);
+    const parsedData = JSON.parse(responseText);
     return NextResponse.json(parsedData);
 
   } catch (error: any) {
