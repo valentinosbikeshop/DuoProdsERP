@@ -20,6 +20,7 @@ import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, C
 import { useDragAutoScroll } from '@/hooks/use-drag-auto-scroll';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
+import { FloatingDraftAssistant } from './floating-draft-assistant';
 
 interface AiSuggestionsGridProps {
   draftItems?: EventItem[];
@@ -61,6 +62,7 @@ export function AiSuggestionsGrid({
   const [consolidateOpen, setConsolidateOpen] = useState(false);
   const [distributeOpen, setDistributeOpen] = useState(false);
   const [distributeItem, setDistributeItem] = useState<EventItem | null>(null);
+  const [highlightedIds, setHighlightedIds] = useState<string[]>([]);
   const supabase = createClient();
   
   useDragAutoScroll({ isDragging: !!draggedItemId });
@@ -817,6 +819,151 @@ export function AiSuggestionsGrid({
     }
   };
 
+  const handleAssistantActions = async (actions: any[]) => {
+    let newSuggestions = [...editableSuggestions];
+    const affectedIds: string[] = [];
+
+    for (const action of actions) {
+      if (action.type === 'CONSOLIDATE' && action.itemIds && action.itemIds.length > 0) {
+        const selectedForConsolidation = newSuggestions.filter(s => action.itemIds.includes(s.id!));
+        if (selectedForConsolidation.length < 2) continue;
+
+        let totalCost = 0;
+        let totalGanancia = 0;
+        selectedForConsolidation.forEach(item => {
+          totalCost += (item.costo * (item.cantidad || 1));
+          totalGanancia += ((item.ganancia || 0) * (item.cantidad || 1));
+        });
+
+        const parentItem = {
+          event_id: eventId,
+          servicio: action.parentName || 'Agrupación',
+          detalle: `Consolidado automático`,
+          tipo_evento: 'Consolidado',
+          cantidad: 1,
+          costo: totalCost,
+          ganancia: totalGanancia,
+          valor_neto: totalCost + totalGanancia,
+          iva: Math.round((totalCost + totalGanancia) * 0.19),
+          valor_total: (totalCost + totalGanancia) + Math.round((totalCost + totalGanancia) * 0.19),
+          margen: totalCost > 0 ? (totalGanancia / totalCost) * 100 : 0,
+          tipo_doc_costo: 'factura',
+          iva_incluido: true,
+          es_insumo: false,
+          approved: false,
+          parent_id: null
+        };
+
+        try {
+          const { data: insertedParent, error: insertError } = await (supabase.from('event_items') as any)
+            .insert(parentItem)
+            .select()
+            .single();
+            
+          if (insertError || !insertedParent) throw insertError;
+          affectedIds.push(insertedParent.id);
+
+          for (const item of selectedForConsolidation) {
+            await (supabase.from('event_items') as any).update({ 
+              parent_id: insertedParent.id,
+              es_insumo: true,
+              ganancia: 0
+            }).eq('id', item.id);
+            
+            const updatedChild = newSuggestions.find(s => s.id === item.id);
+            if (updatedChild) {
+              updatedChild.parent_id = insertedParent.id;
+              updatedChild.es_insumo = true;
+              updatedChild.ganancia = 0;
+              affectedIds.push(updatedChild.id!);
+            }
+          }
+          newSuggestions.push(insertedParent);
+          setExpandedParents(prev => [...prev, insertedParent.id]);
+        } catch (e) {
+          console.error("Error AI consolidate", e);
+        }
+      } else if (action.type === 'ADD_FROM_INVOICE' && action.newItems && action.newItems.length > 0) {
+        let totalCost = 0;
+        const validNewItems = action.newItems.map((ni: any) => {
+          totalCost += (ni.costo * (ni.cantidad || 1));
+          return ni;
+        });
+
+        const parentItem = {
+          event_id: eventId,
+          servicio: action.parentName || 'Factura Agregada',
+          detalle: `Consolidado de factura`,
+          tipo_evento: 'Consolidado',
+          cantidad: 1,
+          costo: totalCost,
+          ganancia: 0,
+          valor_neto: totalCost,
+          iva: Math.round(totalCost * 0.19),
+          valor_total: totalCost + Math.round(totalCost * 0.19),
+          margen: 0,
+          tipo_doc_costo: 'factura',
+          iva_incluido: true,
+          es_insumo: false,
+          approved: false,
+          parent_id: null
+        };
+
+        try {
+          const { data: insertedParent, error: insertError } = await (supabase.from('event_items') as any)
+            .insert(parentItem)
+            .select()
+            .single();
+            
+          if (insertError || !insertedParent) throw insertError;
+          affectedIds.push(insertedParent.id);
+
+          const itemsToInsert = validNewItems.map((ni: any) => ({
+            event_id: eventId,
+            servicio: ni.servicio || 'Insumo',
+            detalle: ni.detalle || '',
+            tipo_evento: 'Insumo',
+            cantidad: ni.cantidad || 1,
+            costo: ni.costo || 0,
+            ganancia: 0,
+            valor_neto: ni.costo || 0,
+            iva: Math.round((ni.costo || 0) * 0.19),
+            valor_total: (ni.costo || 0) + Math.round((ni.costo || 0) * 0.19),
+            margen: 0,
+            tipo_doc_costo: ni.tipo_doc_costo || 'factura',
+            iva_incluido: true,
+            es_insumo: true,
+            approved: false,
+            parent_id: insertedParent.id
+          }));
+
+          const { data: insertedChildren, error: childrenError } = await (supabase.from('event_items') as any)
+            .insert(itemsToInsert)
+            .select();
+
+          if (childrenError) throw childrenError;
+
+          newSuggestions.push(insertedParent);
+          if (insertedChildren) {
+            newSuggestions.push(...insertedChildren);
+            insertedChildren.forEach((c: any) => affectedIds.push(c.id));
+          }
+          setExpandedParents(prev => [...prev, insertedParent.id]);
+        } catch (e) {
+          console.error("Error AI add invoice", e);
+        }
+      }
+    }
+
+    setEditableSuggestions(newSuggestions);
+    if (onDraftChanged) onDraftChanged();
+    
+    if (affectedIds.length > 0) {
+      setHighlightedIds(affectedIds);
+      setTimeout(() => setHighlightedIds([]), 3000);
+    }
+  };
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => 
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
@@ -864,6 +1011,7 @@ export function AiSuggestionsGrid({
     const isTarget = dragOverParentId === item.id;
     const isDragged = draggedItemId === item.id;
     const isConsolidated = hasChildren || item.tipo_evento?.toLowerCase() === 'consolidado';
+    const isHighlighted = highlightedIds.includes(item.id!);
 
     return (
       <TableRow 
@@ -911,6 +1059,8 @@ export function AiSuggestionsGrid({
               ? 'ring-2 ring-indigo-500 bg-indigo-50/80 dark:bg-indigo-950/60 shadow-lg scale-[1.008] z-20 relative'
               : 'ring-2 ring-blue-500 bg-blue-50/80 dark:bg-blue-950/60 shadow-lg scale-[1.008] z-20 relative'
             : ''
+        } ${
+          isHighlighted ? 'bg-violet-100/50 dark:bg-violet-900/30 animate-pulse ring-2 ring-violet-500 shadow-md relative z-10' : ''
         }`}
       >
         {!isChild ? (
@@ -1084,7 +1234,7 @@ export function AiSuggestionsGrid({
         <TableCell className="p-2 align-top text-right text-xs font-medium text-red-900/70 bg-red-50/30">
           {(() => {
              const fin = calculateFinancials(item.costo, item.ganancia, item.tipo_doc_costo || 'factura', item.iva_incluido ?? true);
-             return formatCLP(fin.ivaCredito);
+             return formatCLP(fin.ivaCredito * item.cantidad);
           })()}
         </TableCell>
         <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(item.costo * item.cantidad)}</TableCell>
@@ -1132,7 +1282,7 @@ export function AiSuggestionsGrid({
                 {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
               </button>
             </TableCell>
-            <TableCell className="p-2 align-top text-xs font-medium bg-emerald-50/30 text-emerald-900/80">{formatCLP(item.iva)}</TableCell>
+            <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva * item.cantidad)}</TableCell>
             <TableCell className="p-2 align-top font-semibold bg-emerald-50/30">
               <Input
                 type="number"
@@ -1618,6 +1768,11 @@ export function AiSuggestionsGrid({
           </div>
         </div>
       )}
+
+      <FloatingDraftAssistant 
+        draftItems={editableSuggestions} 
+        onApplyActions={handleAssistantActions} 
+      />
     </div>
   );
 }

@@ -799,7 +799,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
         <TableCell className={`p-2 text-right text-xs font-medium bg-red-50/30 ${isChild ? 'text-red-900/50' : 'text-red-900/70'}`}>
           {(() => {
              const fin = calculateFinancials(item.costo, item.ganancia, item.tipo_doc_costo || 'factura', item.iva_incluido ?? true);
-             return formatCLP(fin.ivaCredito);
+             return formatCLP(fin.ivaCredito * item.cantidad);
           })()}
         </TableCell>
         <TableCell className={`p-2 text-right font-bold bg-red-50/30 border-r ${isChild ? 'text-red-700/60' : 'text-red-700'}`}>{formatCLP(item.costo * item.cantidad)}</TableCell>
@@ -824,7 +824,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
                  {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
                </span>
             </TableCell>
-            <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva)}</TableCell>
+            <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva * item.cantidad)}</TableCell>
             <TableCell className={`p-2 text-sm font-semibold bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900'}`}>{formatCLP(item.valor_total)}</TableCell>
             <TableCell className={`p-2 text-right font-bold bg-emerald-50/30 border-r ${isChild ? 'text-emerald-700/60' : 'text-emerald-700'}`}>{formatCLP(item.valor_total * item.cantidad)}</TableCell>
           </>
