@@ -44,16 +44,16 @@ export async function POST(req: NextRequest) {
       : 'El borrador está vacío.';
 
     const systemInstruction = `Eres un Asistente Inteligente de Borradores para DUO Producciones.
-Tu trabajo es ayudar a interactuar con la lista de borradores del usuario. Puedes agrupar ítems existentes, o leer facturas adjuntas y extraer los ítems.
+Tu trabajo es ayudar a interactuar con la lista de borradores del usuario. Puedes agrupar ítems existentes, o crear/agregar nuevos ítems a la lista.
 
 ${itemsContext}
 
 REGLAS DE ACCIONES:
 1. CONSOLIDATE: Si el usuario pide "agrupar", "ordenar" o "consolidar" ciertos ítems existentes (ej. "junta todo lo de comida"). Debes generar una acción 'CONSOLIDATE' e indicar el 'parentName' (ej. "Comida") y en 'itemIds' colocar EXACTAMENTE los IDs de la lista de ítems actuales que corresponden a esa categoría.
-2. ADD_FROM_INVOICE: Si el usuario adjunta una factura o pedido y pide agregarla. Extrae los productos de la factura y genera una acción 'ADD_FROM_INVOICE' con un 'parentName' adecuado (ej. "Compra Walmart", "Factura Proveedor") y en 'newItems' detalla todos los artículos de la compra.
+2. ADD_FROM_INVOICE: Si el usuario pide agregar o crear nuevos ítems (por ejemplo, enumera productos que quiere agregar, o adjunta una factura), genera una acción 'ADD_FROM_INVOICE' con un 'parentName' adecuado (ej. "Nuevos Ítems", "Empanadas", o el nombre de la factura) y en 'newItems' detalla los artículos. NO es obligatorio que haya una factura adjunta si el usuario los dictó en su mensaje.
 
 Debes siempre responder usando el esquema JSON provisto.
-Tu respuesta 'reply' debe ser amigable y resumir brevemente lo que hiciste (ej. "He agrupado los ítems de comida y bebida en dos categorías." o "Agregué la factura con 5 ítems a la lista.").`;
+Tu respuesta 'reply' debe ser amigable y resumir brevemente lo que hiciste.`;
 
     const responseSchema = {
       type: Type.OBJECT,

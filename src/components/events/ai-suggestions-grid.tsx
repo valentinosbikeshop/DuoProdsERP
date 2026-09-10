@@ -448,6 +448,37 @@ export function AiSuggestionsGrid({
     }
   };
 
+  const handleUngroup = async (parentId: string) => {
+    try {
+      const children = editableSuggestions.filter(s => s.parent_id === parentId);
+      
+      for (const child of children) {
+        await (supabase.from('event_items') as any).update({ 
+          parent_id: null,
+          es_insumo: false
+        }).eq('id', child.id);
+      }
+      
+      await (supabase.from('event_items') as any).delete().eq('id', parentId);
+      
+      setSelectedIds(prev => prev.filter(selId => selId !== parentId));
+      setEditableSuggestions(prev => {
+        let updated = prev.filter(item => item.id !== parentId);
+        updated = updated.map(item => {
+          if (item.parent_id === parentId) {
+            return { ...item, parent_id: null, es_insumo: false };
+          }
+          return item;
+        });
+        return updated;
+      });
+      if (onDraftChanged) onDraftChanged();
+    } catch (e) {
+      console.error(e);
+      alert('Error al desagrupar el ítem.');
+    }
+  };
+
   const handleClearAll = async () => {
     if (window.confirm('¿Deseas vaciar todos los ítems del borrador?')) {
       try {
@@ -1300,6 +1331,18 @@ export function AiSuggestionsGrid({
         <TableCell className="p-2 align-top text-center text-xs font-semibold text-muted-foreground">{formatPercentage(item.margen)}</TableCell>
         <TableCell className="p-2 align-top text-center">
           <div className="flex items-center justify-center gap-1.5">
+            {!isChild && hasChildren && (
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-8 w-8 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 border-orange-200 transition-all shadow-2xs"
+                onClick={() => handleUngroup(item.id!)}
+                disabled={loadingId === item.id || approvingAll}
+                title="Desagrupar y separar ítems"
+              >
+                <Split className="h-4 w-4" />
+              </Button>
+            )}
             {!isChild && (
               <Button
                 size="icon"

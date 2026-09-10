@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Bot, Send, X, FileUp, Loader2, Sparkles, AlertCircle, ChevronDown, Trash2, ListTree } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EventItem } from '@/types';
@@ -120,10 +121,12 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
     setParsedText('');
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <>
       {/* Botón Flotante (Violeta para distinguirlo del Asesor Financiero) */}
-      <div className="fixed bottom-6 right-24 z-40">
+      <div className="fixed bottom-6 right-6 z-40">
         <Button
           onClick={() => setIsOpen(!isOpen)}
           className={cn(
@@ -272,6 +275,7 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
           </div>
         </div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
