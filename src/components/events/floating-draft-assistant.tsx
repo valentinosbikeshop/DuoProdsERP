@@ -20,12 +20,18 @@ interface FloatingDraftAssistantProps {
 
 export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingDraftAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
       content: `¡Hola! Soy tu Asistente de Borradores IA. Puedo ayudarte a organizar esta lista. Pídeme que agrupe ítems (ej. "junta todo lo de comida") o adjunta una factura para que yo extraiga los ítems y los agregue como un grupo consolidado.`
     }
   ]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [parsedText, setParsedText] = useState('');
