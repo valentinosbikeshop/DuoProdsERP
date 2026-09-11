@@ -855,134 +855,454 @@ export function AiSuggestionsGrid({
     const affectedIds: string[] = [];
 
     for (const action of actions) {
-      if (action.type === 'CONSOLIDATE' && action.itemIds && action.itemIds.length > 0) {
-        const selectedForConsolidation = newSuggestions.filter(s => action.itemIds.includes(s.id!));
-        if (selectedForConsolidation.length < 2) continue;
+      try {
+        // 1. CONSOLIDAR
+        if (action.type === 'CONSOLIDATE') {
+          let targetItemIds = action.itemIds || [];
+          if (!Array.isArray(targetItemIds)) targetItemIds = [targetItemIds];
 
-        let totalCost = 0;
-        let totalGanancia = 0;
-        selectedForConsolidation.forEach(item => {
-          totalCost += (item.costo * (item.cantidad || 1));
-          totalGanancia += ((item.ganancia || 0) * (item.cantidad || 1));
-        });
+          // Fallback: Si Gemini envió nombres en lugar de IDs, los resolvemos
+          const validIds = new Set(newSuggestions.map(s => s.id));
+          targetItemIds = targetItemIds.flatMap((idStr: string) => {
+            if (validIds.has(idStr)) return [idStr];
+            const matches = newSuggestions.filter(s => s.servicio?.toLowerCase() === idStr.toLowerCase() || s.servicio?.toLowerCase().includes(idStr.toLowerCase()));
+            return matches.map(m => m.id!);
+          });
 
-        const parentItem = {
-          event_id: eventId,
-          servicio: action.parentName || 'Agrupación',
-          detalle: `Consolidado automático`,
-          tipo_evento: 'Consolidado',
-          cantidad: 1,
-          costo: totalCost,
-          ganancia: totalGanancia,
-          valor_neto: totalCost + totalGanancia,
-          iva: Math.round((totalCost + totalGanancia) * 0.19),
-          valor_total: (totalCost + totalGanancia) + Math.round((totalCost + totalGanancia) * 0.19),
-          margen: totalCost > 0 ? (totalGanancia / totalCost) * 100 : 0,
-          tipo_doc_costo: 'factura',
-          iva_incluido: true,
-          es_insumo: false,
-          approved: false,
-          parent_id: null
-        };
-
-        try {
-          const { data: insertedParent, error: insertError } = await (supabase.from('event_items') as any)
-            .insert(parentItem)
-            .select()
-            .single();
-            
-          if (insertError || !insertedParent) throw insertError;
-          affectedIds.push(insertedParent.id);
-
-          for (const item of selectedForConsolidation) {
-            await (supabase.from('event_items') as any).update({ 
-              parent_id: insertedParent.id,
-              es_insumo: true,
-              ganancia: 0
-            }).eq('id', item.id);
-            
-            const updatedChild = newSuggestions.find(s => s.id === item.id);
-            if (updatedChild) {
-              updatedChild.parent_id = insertedParent.id;
-              updatedChild.es_insumo = true;
-              updatedChild.ganancia = 0;
-              affectedIds.push(updatedChild.id!);
+          if (targetItemIds.length === 0 && action.parentName) {
+            const cleanName = action.parentName.toLowerCase().replace(/s$/, '').trim();
+            const matchingItems = newSuggestions.filter(s => 
+              !s.parent_id && (s.servicio?.toLowerCase().includes(cleanName) || s.detalle?.toLowerCase().includes(cleanName))
+            );
+            if (matchingItems.length > 0) {
+              targetItemIds = matchingItems.map(m => m.id!);
             }
           }
-          newSuggestions.push(insertedParent);
-          setExpandedParents(prev => [...prev, insertedParent.id]);
-        } catch (e) {
-          console.error("Error AI consolidate", e);
-        }
-      } else if (action.type === 'ADD_FROM_INVOICE' && action.newItems && action.newItems.length > 0) {
-        let totalCost = 0;
-        const validNewItems = action.newItems.map((ni: any) => {
-          totalCost += (ni.costo * (ni.cantidad || 1));
-          return ni;
-        });
 
-        const parentItem = {
-          event_id: eventId,
-          servicio: action.parentName || 'Factura Agregada',
-          detalle: `Consolidado de factura`,
-          tipo_evento: 'Consolidado',
-          cantidad: 1,
-          costo: totalCost,
-          ganancia: 0,
-          valor_neto: totalCost,
-          iva: Math.round(totalCost * 0.19),
-          valor_total: totalCost + Math.round(totalCost * 0.19),
-          margen: 0,
-          tipo_doc_costo: 'factura',
-          iva_incluido: true,
-          es_insumo: false,
-          approved: false,
-          parent_id: null
-        };
+          const selectedForConsolidation = newSuggestions.filter(s => targetItemIds.includes(s.id!));
+          if (selectedForConsolidation.length > 0) {
+            const parentQty = (action.parentQuantity && action.parentQuantity > 0) ? action.parentQuantity : 1;
+            let totalCost = 0;
+            let totalGanancia = 0;
+            selectedForConsolidation.forEach(item => {
+              totalCost += (item.costo * (item.cantidad || 1));
+              totalGanancia += ((item.ganancia || 0) * (item.cantidad || 1));
+            });
 
-        try {
-          const { data: insertedParent, error: insertError } = await (supabase.from('event_items') as any)
-            .insert(parentItem)
-            .select()
-            .single();
-            
-          if (insertError || !insertedParent) throw insertError;
-          affectedIds.push(insertedParent.id);
+            const parentUnitCost = Math.round(totalCost / parentQty);
+            const parentUnitGanancia = Math.round(totalGanancia / parentQty);
+            const fin = calculateFinancials(parentUnitCost, parentUnitGanancia, 'factura', true, false);
 
-          const itemsToInsert = validNewItems.map((ni: any) => ({
-            event_id: eventId,
-            servicio: ni.servicio || 'Insumo',
-            detalle: ni.detalle || '',
-            tipo_evento: 'Insumo',
-            cantidad: ni.cantidad || 1,
-            costo: ni.costo || 0,
-            ganancia: 0,
-            valor_neto: ni.costo || 0,
-            iva: Math.round((ni.costo || 0) * 0.19),
-            valor_total: (ni.costo || 0) + Math.round((ni.costo || 0) * 0.19),
-            margen: 0,
-            tipo_doc_costo: ni.tipo_doc_costo || 'factura',
-            iva_incluido: true,
-            es_insumo: true,
-            approved: false,
-            parent_id: insertedParent.id
-          }));
+            const parentItem = {
+              event_id: eventId,
+              servicio: action.parentName || 'Consolidado',
+              detalle: action.parentDetail || 'Consolidado de ítems',
+              tipo_evento: 'Consolidado',
+              cantidad: parentQty,
+              costo: parentUnitCost,
+              ganancia: parentUnitGanancia,
+              valor_neto: fin.valorNeto,
+              iva: fin.ivaDebito,
+              valor_total: fin.valorTotal,
+              margen: fin.margen,
+              tipo_doc_costo: 'factura',
+              iva_incluido: true,
+              es_insumo: false,
+              approved: false,
+              parent_id: null
+            };
 
-          const { data: insertedChildren, error: childrenError } = await (supabase.from('event_items') as any)
-            .insert(itemsToInsert)
-            .select();
+            const { data: insertedParent, error: insertError } = await (supabase.from('event_items') as any)
+              .insert(parentItem)
+              .select()
+              .single();
+              
+            if (insertError || !insertedParent) throw insertError;
+            affectedIds.push(insertedParent.id);
 
-          if (childrenError) throw childrenError;
-
-          newSuggestions.push(insertedParent);
-          if (insertedChildren) {
-            newSuggestions.push(...insertedChildren);
-            insertedChildren.forEach((c: any) => affectedIds.push(c.id));
+            for (const item of selectedForConsolidation) {
+              await (supabase.from('event_items') as any).update({ 
+                parent_id: insertedParent.id,
+                es_insumo: true,
+                ganancia: 0
+              }).eq('id', item.id);
+              
+              const updatedChild = newSuggestions.find(s => s.id === item.id);
+              if (updatedChild) {
+                updatedChild.parent_id = insertedParent.id;
+                updatedChild.es_insumo = true;
+                updatedChild.ganancia = 0;
+                affectedIds.push(updatedChild.id!);
+              }
+            }
+            newSuggestions.push(insertedParent);
+            setExpandedParents(prev => [...prev, insertedParent.id]);
           }
-          setExpandedParents(prev => [...prev, insertedParent.id]);
-        } catch (e) {
-          console.error("Error AI add invoice", e);
         }
+
+        // 2. DESAGRUPAR (UNCONSOLIDATE)
+        else if (action.type === 'UNCONSOLIDATE') {
+          // Desarmar grupo padre completo
+          if (action.parentId) {
+            const parent = newSuggestions.find(s => s.id === action.parentId);
+            const children = newSuggestions.filter(s => s.parent_id === action.parentId);
+            
+            for (const child of children) {
+              const targetGanancia = child.ganancia > 0 ? child.ganancia : (child.costo > 0 ? Math.round(child.costo * 0.2) : 0);
+              const childFin = calculateFinancials(
+                child.costo, 
+                targetGanancia, 
+                (child.tipo_doc_costo || 'factura') as any, 
+                child.iva_incluido ?? true, 
+                false
+              );
+
+              await (supabase.from('event_items') as any).update({ 
+                parent_id: null,
+                es_insumo: false,
+                ganancia: targetGanancia,
+                valor_neto: childFin.valorNeto,
+                iva: childFin.ivaDebito,
+                valor_total: childFin.valorTotal,
+                margen: childFin.margen
+              }).eq('id', child.id);
+
+              const childInState = newSuggestions.find(s => s.id === child.id);
+              if (childInState) {
+                childInState.parent_id = null;
+                childInState.es_insumo = false;
+                childInState.ganancia = targetGanancia;
+                childInState.valor_neto = childFin.valorNeto;
+                childInState.iva = childFin.ivaDebito;
+                childInState.valor_total = childFin.valorTotal;
+                childInState.margen = childFin.margen;
+                affectedIds.push(childInState.id!);
+              }
+            }
+
+            await (supabase.from('event_items') as any).delete().eq('id', action.parentId);
+            newSuggestions = newSuggestions.filter(s => s.id !== action.parentId);
+            setSelectedIds(prev => prev.filter(selId => selId !== action.parentId));
+          }
+          // Liberar ítems hijos específicos de su grupo
+          else if (action.itemIds && action.itemIds.length > 0) {
+            const parentsToRecalculate = new Set<string>();
+
+            for (const childId of action.itemIds) {
+              const child = newSuggestions.find(s => s.id === childId);
+              if (child && child.parent_id) {
+                parentsToRecalculate.add(child.parent_id);
+                const targetGanancia = child.ganancia > 0 ? child.ganancia : (child.costo > 0 ? Math.round(child.costo * 0.2) : 0);
+                const childFin = calculateFinancials(
+                  child.costo, 
+                  targetGanancia, 
+                  (child.tipo_doc_costo || 'factura') as any, 
+                  child.iva_incluido ?? true, 
+                  false
+                );
+
+                await (supabase.from('event_items') as any).update({ 
+                  parent_id: null,
+                  es_insumo: false,
+                  ganancia: targetGanancia,
+                  valor_neto: childFin.valorNeto,
+                  iva: childFin.ivaDebito,
+                  valor_total: childFin.valorTotal,
+                  margen: childFin.margen
+                }).eq('id', child.id);
+
+                child.parent_id = null;
+                child.es_insumo = false;
+                child.ganancia = targetGanancia;
+                child.valor_neto = childFin.valorNeto;
+                child.iva = childFin.ivaDebito;
+                child.valor_total = childFin.valorTotal;
+                child.margen = childFin.margen;
+                affectedIds.push(child.id!);
+              }
+            }
+
+            // Recalcular costos de los padres afectados
+            for (const pId of Array.from(parentsToRecalculate)) {
+              const remainingChildren = newSuggestions.filter(s => s.parent_id === pId);
+              const parent = newSuggestions.find(s => s.id === pId);
+              if (remainingChildren.length === 0 && parent) {
+                await (supabase.from('event_items') as any).delete().eq('id', pId);
+                newSuggestions = newSuggestions.filter(s => s.id !== pId);
+              } else if (parent) {
+                const newTotal = remainingChildren.reduce((sum, c) => sum + (c.costo * (c.cantidad || 1)), 0);
+                const newUnitCost = Math.round(newTotal / (parent.cantidad || 1));
+                const pFin = calculateFinancials(newUnitCost, parent.ganancia, (parent.tipo_doc_costo || 'factura') as any, parent.iva_incluido ?? true, false);
+                
+                await (supabase.from('event_items') as any).update({
+                  costo: newUnitCost,
+                  valor_neto: pFin.valorNeto,
+                  iva: pFin.ivaDebito,
+                  valor_total: pFin.valorTotal,
+                  margen: pFin.margen
+                }).eq('id', pId);
+
+                parent.costo = newUnitCost;
+                parent.valor_neto = pFin.valorNeto;
+                parent.iva = pFin.ivaDebito;
+                parent.valor_total = pFin.valorTotal;
+                parent.margen = pFin.margen;
+                affectedIds.push(pId);
+              }
+            }
+          }
+        }
+
+        // 3. REORDENAR (REORDER)
+        else if (action.type === 'REORDER' && action.orderedIds && action.orderedIds.length > 0) {
+          const orderedMap = new Map<string, number>();
+          action.orderedIds.forEach((id: string, idx: number) => orderedMap.set(id, idx));
+
+          // Reordenar en memoria
+          newSuggestions.sort((a, b) => {
+            const aIdx = orderedMap.has(a.id!) ? orderedMap.get(a.id!)! : 999999;
+            const bIdx = orderedMap.has(b.id!) ? orderedMap.get(b.id!)! : 999999;
+            return aIdx - bIdx;
+          });
+
+          // Persistir orden secuencialmente en created_at
+          const nowBase = Date.now();
+          for (let i = 0; i < action.orderedIds.length; i++) {
+            const id = action.orderedIds[i];
+            const newCreatedAt = new Date(nowBase + (i * 1000)).toISOString();
+            await (supabase.from('event_items') as any).update({ created_at: newCreatedAt }).eq('id', id);
+            const target = newSuggestions.find(s => s.id === id);
+            if (target) target.created_at = newCreatedAt;
+            affectedIds.push(id);
+          }
+        }
+
+        // 4. INTERCAMBIAR NOMBRE Y DETALLE (SWAP_NAME_DETAIL)
+        else if (action.type === 'SWAP_NAME_DETAIL' && action.itemIds) {
+          const itemIdsArray = Array.isArray(action.itemIds) ? action.itemIds : [action.itemIds];
+          for (const idStr of itemIdsArray) {
+            const item = newSuggestions.find(s => s.id === idStr || s.servicio?.toLowerCase() === idStr?.toLowerCase());
+            if (item) {
+              const oldServicio = item.servicio || '';
+              const oldDetalle = item.detalle || '';
+              const newServicio = oldDetalle.trim() ? oldDetalle.trim() : oldServicio;
+              const newDetalle = oldServicio;
+
+              item.servicio = newServicio;
+              item.detalle = newDetalle;
+
+              await (supabase.from('event_items') as any).update({
+                servicio: newServicio,
+                detalle: newDetalle
+              }).eq('id', item.id);
+
+              affectedIds.push(item.id!);
+            }
+          }
+        }
+
+        // 5. ACTUALIZAR ÍTEMS (UPDATE_ITEMS)
+        else if (action.type === 'UPDATE_ITEMS' && action.updates) {
+          const updatesArray = Array.isArray(action.updates) ? action.updates : [action.updates];
+          if (updatesArray.length === 0) continue;
+          
+          const parentsToRecalculate = new Set<string>();
+
+          for (const update of updatesArray) {
+            const item = newSuggestions.find(s => s.id === update.id || s.servicio?.toLowerCase() === update.id?.toLowerCase() || s.servicio?.toLowerCase().includes(update.id?.toLowerCase() || '@@@'));
+            if (!item) continue;
+
+            if (update.servicio !== undefined) item.servicio = update.servicio;
+            if (update.detalle !== undefined) item.detalle = update.detalle;
+            if (update.cantidad !== undefined) item.cantidad = Number(update.cantidad) || 1;
+            if (update.costo !== undefined) item.costo = Number(update.costo) || 0;
+            if (update.ganancia !== undefined) item.ganancia = Number(update.ganancia) || 0;
+            if (update.tipo_doc_costo !== undefined) {
+              const td = String(update.tipo_doc_costo).toLowerCase();
+              item.tipo_doc_costo = ['factura', 'boleta'].includes(td) ? td as 'factura' | 'boleta' : 'factura';
+            }
+            if (update.es_insumo !== undefined) item.es_insumo = Boolean(update.es_insumo);
+
+            const fin = calculateFinancials(
+              item.costo, 
+              item.ganancia, 
+              (item.tipo_doc_costo || 'factura') as any, 
+              item.iva_incluido ?? true, 
+              item.es_insumo ?? false
+            );
+
+            item.valor_neto = fin.valorNeto;
+            item.iva = fin.ivaDebito;
+            item.valor_total = fin.valorTotal;
+            item.margen = fin.margen;
+
+            await updateSupabase(item);
+            affectedIds.push(item.id!);
+
+            if (item.parent_id) {
+              parentsToRecalculate.add(item.parent_id);
+            }
+          }
+
+          // Si se actualizaron hijos, recalcular sus padres
+          for (const pId of Array.from(parentsToRecalculate)) {
+            const children = newSuggestions.filter(s => s.parent_id === pId);
+            const parent = newSuggestions.find(s => s.id === pId);
+            if (parent && children.length > 0) {
+              const newTotal = children.reduce((sum, c) => sum + (c.costo * (c.cantidad || 1)), 0);
+              const newUnitCost = Math.round(newTotal / (parent.cantidad || 1));
+              const pFin = calculateFinancials(newUnitCost, parent.ganancia, (parent.tipo_doc_costo || 'factura') as any, parent.iva_incluido ?? true, false);
+              
+              parent.costo = newUnitCost;
+              parent.valor_neto = pFin.valorNeto;
+              parent.iva = pFin.ivaDebito;
+              parent.valor_total = pFin.valorTotal;
+              parent.margen = pFin.margen;
+              await updateSupabase(parent);
+              affectedIds.push(pId);
+            }
+          }
+        }
+
+        // 6. AGREGAR NUEVOS ÍTEMS (ADD_ITEMS o ADD_FROM_INVOICE)
+        else if ((action.type === 'ADD_ITEMS' || action.type === 'ADD_FROM_INVOICE') && action.newItems) {
+          const newItemsArray = Array.isArray(action.newItems) ? action.newItems : [action.newItems];
+          if (newItemsArray.length === 0) continue;
+
+          const isConsolidated = action.asConsolidated ?? (action.type === 'ADD_FROM_INVOICE' || !!action.parentName);
+
+          if (isConsolidated) {
+            let totalCost = 0;
+            const validNewItems = newItemsArray.map((ni: any) => {
+              const c = Number(ni.costo) || 0;
+              const q = Number(ni.cantidad) || 1;
+              totalCost += (c * q);
+              return ni;
+            });
+
+            const parentQty = 1;
+            const parentFin = calculateFinancials(totalCost, 0, 'factura', true, false);
+
+            const parentItem = {
+              event_id: eventId,
+              servicio: action.parentName || 'Grupo Agregado',
+              detalle: action.parentDetail || 'Consolidado generado por IA',
+              tipo_evento: 'Consolidado',
+              cantidad: parentQty,
+              costo: totalCost,
+              ganancia: 0,
+              valor_neto: parentFin.valorNeto,
+              iva: parentFin.ivaDebito,
+              valor_total: parentFin.valorTotal,
+              margen: parentFin.margen,
+              tipo_doc_costo: 'factura',
+              iva_incluido: true,
+              es_insumo: false,
+              approved: false,
+              parent_id: null
+            };
+
+            const { data: insertedParent, error: insertError } = await (supabase.from('event_items') as any)
+              .insert(parentItem)
+              .select()
+              .single();
+              
+            if (insertError || !insertedParent) throw insertError;
+            affectedIds.push(insertedParent.id);
+
+            const itemsToInsert = validNewItems.map((ni: any) => {
+              const c = Number(ni.costo) || 0;
+              const rawDoc = String(ni.tipo_doc_costo || 'factura').toLowerCase();
+              const td = ['factura', 'boleta'].includes(rawDoc) ? rawDoc : 'factura';
+              return {
+                event_id: eventId,
+                servicio: ni.servicio || 'Insumo',
+                detalle: ni.detalle || '',
+                tipo_evento: 'Insumo',
+                cantidad: Number(ni.cantidad) || 1,
+                costo: c,
+                ganancia: 0,
+                valor_neto: c,
+                iva: Math.round(c * 0.19),
+                valor_total: c + Math.round(c * 0.19),
+                margen: 0,
+                tipo_doc_costo: td,
+                iva_incluido: true,
+                es_insumo: true,
+                approved: false,
+                parent_id: insertedParent.id
+              };
+            });
+
+            const { data: insertedChildren, error: childrenError } = await (supabase.from('event_items') as any)
+              .insert(itemsToInsert)
+              .select();
+
+            if (childrenError) throw childrenError;
+
+            newSuggestions.push(insertedParent);
+            if (insertedChildren) {
+              newSuggestions.push(...insertedChildren);
+              insertedChildren.forEach((c: any) => affectedIds.push(c.id));
+            }
+            setExpandedParents(prev => [...prev, insertedParent.id]);
+          } else {
+            // Ítems sueltos independientes
+            const itemsToInsert = newItemsArray.map((ni: any) => {
+              const costo = Number(ni.costo) || 0;
+              const ganancia = Number(ni.ganancia) || Math.round(costo * 0.2);
+              const rawDoc = String(ni.tipo_doc_costo || 'factura').toLowerCase();
+              const tipoDoc = ['factura', 'boleta'].includes(rawDoc) ? rawDoc as 'factura' | 'boleta' : 'factura';
+              const esInsumo = Boolean(ni.es_insumo ?? false);
+              const fin = calculateFinancials(costo, ganancia, tipoDoc, true, esInsumo);
+
+              return {
+                event_id: eventId,
+                servicio: ni.servicio,
+                detalle: ni.detalle || '',
+                tipo_evento: ni.tipo_evento || 'AI',
+                cantidad: ni.cantidad || 1,
+                costo,
+                ganancia,
+                valor_neto: fin.valorNeto,
+                iva: fin.ivaDebito,
+                valor_total: fin.valorTotal,
+                margen: fin.margen,
+                tipo_doc_costo: tipoDoc,
+                iva_incluido: true,
+                es_insumo: esInsumo,
+                approved: false,
+                parent_id: null
+              };
+            });
+
+            const { data: inserted, error: insertError } = await (supabase.from('event_items') as any)
+              .insert(itemsToInsert)
+              .select();
+
+            if (insertError) throw insertError;
+            if (inserted) {
+              newSuggestions.push(...inserted);
+              inserted.forEach((it: any) => affectedIds.push(it.id));
+            }
+          }
+        }
+
+        // 7. ELIMINAR ÍTEMS (DELETE_ITEMS)
+        else if (action.type === 'DELETE_ITEMS' && action.itemIds && action.itemIds.length > 0) {
+          const idsToRemove = [...action.itemIds];
+          for (const id of action.itemIds) {
+            const children = newSuggestions.filter(s => s.parent_id === id).map(s => s.id);
+            idsToRemove.push(...children);
+          }
+
+          await (supabase.from('event_items') as any).delete().in('id', idsToRemove);
+          newSuggestions = newSuggestions.filter(s => !idsToRemove.includes(s.id!));
+          setSelectedIds(prev => prev.filter(selId => !idsToRemove.includes(selId)));
+        }
+
+      } catch (actionErr) {
+        console.error(`Error ejecutando acción AI ${action.type}:`, actionErr);
       }
     }
 
@@ -991,7 +1311,7 @@ export function AiSuggestionsGrid({
     
     if (affectedIds.length > 0) {
       setHighlightedIds(affectedIds);
-      setTimeout(() => setHighlightedIds([]), 3000);
+      setTimeout(() => setHighlightedIds([]), 3500);
     }
   };
 
