@@ -36,40 +36,153 @@ export async function POST(req: NextRequest) {
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-    // Preparamos el contexto de los ítems actuales
-    const itemsContext = draftItems && draftItems.length > 0 
-      ? `ÍTEMS ACTUALES EN EL BORRADOR:\n${draftItems.map((item: any) => 
-          `- ID: "${item.id}" | ${item.cantidad}x ${item.servicio} | Costo Unit: $${item.costo} | Padre: ${item.parent_id || 'Ninguno'}`
-        ).join('\n')}`
-      : 'El borrador está vacío.';
+    // Preparar contexto completo, detallado y jerárquico de todos los ítems
+    let itemsContext = 'El borrador está actualmente vacío.';
 
-    const systemInstruction = `Eres un Asistente Inteligente de Borradores para DUO Producciones.
-Tu trabajo es ayudar a interactuar con la lista de borradores del usuario. Puedes agrupar ítems existentes, o crear/agregar nuevos ítems a la lista.
+    if (draftItems && draftItems.length > 0) {
+      const topLevel = draftItems.filter((i: any) => !i.parent_id);
+      const children = draftItems.filter((i: any) => !!i.parent_id);
 
+      const formatItem = (item: any, indent = '') => {
+        return `${indent}- [ID: "${item.id}"]
+${indent}  * Nombre (servicio): "${item.servicio || ''}"
+${indent}  * Detalle (detalle): "${item.detalle || '(Sin detalle)'}"
+${indent}  * Tipo Evento: ${item.tipo_evento || 'AI'}
+${indent}  * Cantidad: ${item.cantidad} | Costo Unitario: $${item.costo} | Costo Total: $${(item.costo || 0) * (item.cantidad || 1)}
+${indent}  * Ganancia Unitaria: $${item.ganancia || 0} | Valor Neto: $${item.valor_neto || 0} | IVA: $${item.iva || 0} | Valor Total: $${item.valor_total || 0} | Margen: ${item.margen || 0}%
+${indent}  * Documento Costo: ${item.tipo_doc_costo || 'factura'} | Es Insumo: ${item.es_insumo ? 'Sí' : 'No'} | IVA Incluido: ${item.iva_incluido !== false ? 'Sí' : 'No'}
+${indent}  * Padre ID: ${item.parent_id ? `"${item.parent_id}"` : 'Ninguno (Nivel principal)'}`;
+      };
+
+      const sections: string[] = [];
+
+      // 1. Grupos consolidados y sus hijos
+      const consolidatedParents = topLevel.filter((p: any) => 
+        p.tipo_evento?.toLowerCase() === 'consolidado' || children.some((c: any) => c.parent_id === p.id)
+      );
+
+      if (consolidatedParents.length > 0) {
+        sections.push('--- GRUPOS CONSOLIDADOS (PADRES E HIJOS) ---');
+        consolidatedParents.forEach((parent: any) => {
+          sections.push(formatItem(parent, ''));
+          const parentChildren = children.filter((c: any) => c.parent_id === parent.id);
+          if (parentChildren.length > 0) {
+            sections.push('    [Ítems agrupados / Insumos dentro de este grupo]:');
+            parentChildren.forEach((child: any) => {
+              sections.push(formatItem(child, '    '));
+            });
+          }
+        });
+      }
+
+      // 2. Ítems independientes (sin padre y sin hijos)
+      const standaloneItems = topLevel.filter((i: any) => 
+        !consolidatedParents.some((p: any) => p.id === i.id)
+      );
+
+      if (standaloneItems.length > 0) {
+        sections.push('--- ÍTEMS INDEPENDIENTES (SIN AGRUPAR) ---');
+        standaloneItems.forEach((item: any) => {
+          sections.push(formatItem(item, ''));
+        });
+      }
+
+      // 3. Resumen de totales
+      const totalCosto = draftItems.reduce((sum: number, it: any) => sum + ((it.costo || 0) * (it.cantidad || 1)), 0);
+      const totalVenta = topLevel.filter((it: any) => !it.es_insumo).reduce((sum: number, it: any) => sum + ((it.valor_total || 0) * (it.cantidad || 1)), 0);
+
+      sections.push(`--- RESUMEN GLOBAL ---
+Total de ítems registrados: ${draftItems.length} (${topLevel.length} en nivel principal, ${children.length} hijos)
+Costo Total acumulado: $${totalCosto} | Total Facturación Estimada: $${totalVenta}`);
+
+      itemsContext = sections.join('\n\n');
+    }
+
+    const systemInstruction = `Eres el Asistente Inteligente de Borradores de DUO Producciones.
+Tu misión es asistir al productor a gestionar, ordenar, estructurar, corregir y pulir los presupuestos y borradores de eventos.
+
+TIENES ACCESO COMPLETO A TODA LA INFORMACIÓN DE LOS ÍTEMS DEL BORRADOR:
 ${itemsContext}
 
-REGLAS DE ACCIONES:
-1. CONSOLIDATE: Si el usuario pide "agrupar", "ordenar" o "consolidar" ciertos ítems existentes (ej. "junta todo lo de comida"). Debes generar una acción 'CONSOLIDATE' e indicar el 'parentName' (ej. "Comida") y en 'itemIds' colocar EXACTAMENTE los IDs de la lista de ítems actuales que corresponden a esa categoría.
-2. ADD_FROM_INVOICE: Si el usuario pide agregar o crear nuevos ítems (por ejemplo, enumera productos que quiere agregar, o adjunta una factura), genera una acción 'ADD_FROM_INVOICE' con un 'parentName' adecuado (ej. "Nuevos Ítems", "Empanadas", o el nombre de la factura) y en 'newItems' detalla los artículos. NO es obligatorio que haya una factura adjunta si el usuario los dictó en su mensaje.
+CAPACIDADES Y ACCIONES DISPONIBLES QUE PUEDES EJECUTAR:
+1. CONSOLIDATE: Agrupa ítems existentes bajo un nuevo ítem padre consolidado.
+   - Requiere: 'parentName' (nombre claro y representativo del grupo, ej: "Empanadas", "Bar Abierto", "Audio e Iluminación").
+   - Requiere: 'itemIds' (arreglo con los IDs EXACTOS de los ítems existentes en la lista que formarán parte de este grupo).
+   - Opcional: 'parentDetail' (detalle descriptivo), 'parentQuantity' (cantidad para el grupo, default 1).
 
-Debes siempre responder usando el esquema JSON provisto.
-Tu respuesta 'reply' debe ser amigable y resumir brevemente lo que hiciste.`;
+2. UNCONSOLIDATE: Desagrupa o libera ítems consolidados.
+   - Para desarmar un grupo completo: proporciona 'parentId' (el ID del grupo padre que se desea eliminar para que todos sus hijos queden libres como ítems independientes).
+   - Para liberar ítems específicos de un grupo: proporciona 'itemIds' con los IDs de los hijos a liberar.
+
+3. REORDER: Reordena la lista de ítems principales.
+   - Requiere: 'orderedIds' (arreglo con todos los IDs de los ítems principales en el orden exacto deseado, por ejemplo, ordenados por costo de mayor a menor, alfabéticamente, o colocando primero la comida y luego la bebida).
+
+4. SWAP_NAME_DETAIL: Intercambia el Nombre ('servicio') y el Detalle ('detalle') de los ítems seleccionados.
+   - Muy útil cuando al importar o dictar, el nombre quedó en el detalle y el detalle en el nombre.
+   - Requiere: 'itemIds' (arreglo con los IDs de los ítems a los que se les debe invertir nombre y detalle).
+
+5. UPDATE_ITEMS: Modifica datos específicos de ítems existentes (cambiar nombres, detalles, costos, cantidades, márgenes, etc.).
+   - Requiere: 'updates' (arreglo de objetos con { id, servicio?, detalle?, cantidad?, costo?, ganancia?, tipo_doc_costo?, es_insumo? }).
+
+6. ADD_ITEMS: Agrega nuevos ítems al borrador (a partir de lo dictado por el usuario o extraído de una factura adjunta).
+   - Requiere: 'newItems' (arreglo de artículos con servicio, detalle, cantidad, costo, ganancia, tipo_doc_costo, es_insumo).
+   - Opcional: 'asConsolidated' (true si deben agruparse bajo un nuevo consolidado 'parentName', o false si se insertan sueltos).
+
+7. DELETE_ITEMS: Elimina ítems obsoletos, duplicados o no deseados del borrador.
+   - Requiere: 'itemIds' (arreglo con los IDs exactos a borrar).
+
+REGLAS DE INTERACCIÓN:
+- Responde siempre con el esquema JSON indicado.
+- En 'reply', sé cordial, ejecutivo y resume con total precisión lo que hiciste (o solicita confirmación breve si una solicitud es ambigua).
+- ¡REGLA FUNDAMENTAL PARA CONSOLIDATE!: Al generar una acción 'CONSOLIDATE', es ESTRICTAMENTE OBLIGATORIO incluir el campo 'itemIds' con los IDs exactos de los ítems a agrupar. ¡NUNCA lo omitas ni lo dejes vacío! Ejemplo: si el usuario pide agrupar empanadas, debes poner en 'itemIds' los IDs de cada una de las empanadas existentes (ej. ["id-1", "id-2"]).
+- Si el usuario dice "cambia el detalle por el nombre" o viceversa, genera la acción SWAP_NAME_DETAIL con los itemIds respectivos.
+- Si no hay acciones que realizar (solo fue una duda o pregunta informativa), devuelve 'actions': [].`;
 
     const responseSchema = {
       type: Type.OBJECT,
       properties: {
-        reply: { type: Type.STRING, description: 'Mensaje amigable para el usuario' },
+        reply: { type: Type.STRING, description: 'Respuesta amigable y explicativa para el usuario' },
         actions: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
             properties: {
-              type: { type: Type.STRING, description: 'Tipo de acción: CONSOLIDATE, ADD_FROM_INVOICE' },
-              parentName: { type: Type.STRING, description: 'Nombre de la categoría padre' },
+              type: { 
+                type: Type.STRING, 
+                enum: ['CONSOLIDATE', 'UNCONSOLIDATE', 'REORDER', 'SWAP_NAME_DETAIL', 'UPDATE_ITEMS', 'ADD_ITEMS', 'DELETE_ITEMS'],
+                description: 'Tipo de acción a ejecutar' 
+              },
+              parentName: { type: Type.STRING, description: 'Nombre de la agrupación para CONSOLIDATE o ADD_ITEMS agrupados' },
+              parentDetail: { type: Type.STRING, description: 'Detalle para el grupo consolidado' },
+              parentId: { type: Type.STRING, description: 'ID del grupo padre para UNCONSOLIDATE' },
+              parentQuantity: { type: Type.NUMBER, description: 'Cantidad para el grupo consolidado' },
               itemIds: { 
                 type: Type.ARRAY, 
                 items: { type: Type.STRING },
-                description: 'Solo para CONSOLIDATE: IDs de los ítems existentes a agrupar' 
+                description: 'IDs de los ítems existentes afectados (CONSOLIDATE, UNCONSOLIDATE parcial, SWAP_NAME_DETAIL, DELETE_ITEMS)' 
+              },
+              orderedIds: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: 'Lista ordenada de IDs para REORDER'
+              },
+              updates: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    servicio: { type: Type.STRING },
+                    detalle: { type: Type.STRING },
+                    cantidad: { type: Type.NUMBER },
+                    costo: { type: Type.NUMBER },
+                    ganancia: { type: Type.NUMBER },
+                    tipo_doc_costo: { type: Type.STRING, enum: ['factura', 'boleta'] },
+                    es_insumo: { type: Type.BOOLEAN }
+                  },
+                  required: ['id']
+                },
+                description: 'Lista de actualizaciones para UPDATE_ITEMS'
               },
               newItems: {
                 type: Type.ARRAY,
@@ -78,55 +191,108 @@ Tu respuesta 'reply' debe ser amigable y resumir brevemente lo que hiciste.`;
                   properties: {
                     servicio: { type: Type.STRING },
                     detalle: { type: Type.STRING },
-                    cantidad: { type: Type.INTEGER },
+                    cantidad: { type: Type.NUMBER },
                     costo: { type: Type.NUMBER },
-                    tipo_doc_costo: { type: Type.STRING, description: 'factura o boleta' }
-                  }
+                    ganancia: { type: Type.NUMBER },
+                    tipo_doc_costo: { type: Type.STRING, enum: ['factura', 'boleta'] },
+                    es_insumo: { type: Type.BOOLEAN }
+                  },
+                  required: ['servicio']
                 },
-                description: 'Solo para ADD_FROM_INVOICE: Lista de nuevos artículos encontrados en el archivo'
+                description: 'Lista de nuevos artículos para ADD_ITEMS'
+              },
+              asConsolidated: { 
+                type: Type.BOOLEAN, 
+                description: 'Para ADD_ITEMS: si se agrupan bajo un nuevo consolidado' 
               }
-            }
+            },
+            required: ['type']
           }
         }
       },
       required: ['reply', 'actions']
     };
 
-    const formattedMessages = messages.map((msg: any) => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }],
-    }));
+    // Sanitizar mensajes para la API de Gemini:
+    // 1. Debe iniciar siempre con un turno 'user'
+    // 2. Deben alternar estrictamente 'user' y 'model'
+    const sanitizedMessages: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
-    if (fileText) {
-       formattedMessages[formattedMessages.length - 1].parts.push({ text: `\n[Archivo adjunto]:\n${fileText}` });
+    for (const msg of messages) {
+      const role = msg.role === 'assistant' ? 'model' : 'user';
+      const text = (msg.content || '').trim();
+      if (!text) continue;
+
+      // Si la conversación aún no tiene mensajes y el primero es 'model', lo ignoramos
+      if (sanitizedMessages.length === 0 && role === 'model') {
+        continue;
+      }
+
+      // Si el rol es el mismo que el anterior, concatenamos el texto
+      if (sanitizedMessages.length > 0 && sanitizedMessages[sanitizedMessages.length - 1].role === role) {
+        sanitizedMessages[sanitizedMessages.length - 1].parts[0].text += `\n\n${text}`;
+      } else {
+        sanitizedMessages.push({
+          role,
+          parts: [{ text }]
+        });
+      }
     }
 
-    const modelsToTry = ['gemini-3.1-pro', 'gemini-3.6-flash', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-flash'];
-    let responseText = null;
-    let lastError = null;
-    
+    // Si por alguna razón quedó vacío, iniciamos con un mensaje de usuario por defecto
+    if (sanitizedMessages.length === 0) {
+      sanitizedMessages.push({
+        role: 'user',
+        parts: [{ text: 'Hola, asísteme con este borrador.' }]
+      });
+    }
+
+    // Si hay un archivo adjunto con texto, se añade al último mensaje de usuario
+    if (fileText && fileText.trim()) {
+      const lastUserMsg = [...sanitizedMessages].reverse().find(m => m.role === 'user');
+      if (lastUserMsg) {
+        lastUserMsg.parts.push({ text: `\n\n[DOCUMENTO O FACTURA ADJUNTA]:\n${fileText}` });
+      }
+    }
+
+    // Familia de modelos activos en Gemini API
+    const modelsToTry = [
+      'gemini-3.6-flash'
+    ];
+
+    let responseText: string | null = null;
+    let lastError: any = null;
+
     for (const model of modelsToTry) {
-        try {
-            const response = await ai.models.generateContent({
-                model,
-                contents: formattedMessages,
-                config: {
-                    systemInstruction,
-                    responseMimeType: 'application/json',
-                    responseSchema,
-                    temperature: 0.1,
-                }
-            });
-            if (response && response.text) {
-                // Verificar que sea JSON válido
-                JSON.parse(response.text);
-                responseText = response.text;
-                break;
-            }
-        } catch (e: any) {
-            console.error(`Error con modelo ${model}:`, e.message || e);
-            lastError = e;
+      try {
+        console.log(`Draft Assistant intentando modelo: ${model}`);
+        const response = await ai.models.generateContent({
+          model,
+          contents: sanitizedMessages,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema,
+            temperature: 0.15,
+          }
+        });
+
+        if (response && response.text) {
+          let cleanedText = response.text.trim();
+          // Eliminar posibles bloques de markdown ```json ... ``` si el modelo los incluyó
+          if (cleanedText.startsWith('```')) {
+            cleanedText = cleanedText.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
+          }
+
+          JSON.parse(cleanedText);
+          responseText = cleanedText;
+          console.log(`Draft Assistant éxito con modelo: ${model}`);
+          break;
         }
+      } catch (e: any) {
+        console.error(`Error Draft Assistant con modelo ${model}:`, e.message || e);
+        lastError = e;
+      }
     }
 
     if (!responseText) {
@@ -137,9 +303,9 @@ Tu respuesta 'reply' debe ser amigable y resumir brevemente lo que hiciste.`;
     return NextResponse.json(parsedData);
 
   } catch (error: any) {
-    console.error('Error en draft assistant:', error);
+    console.error('Error general en draft assistant:', error);
     return NextResponse.json(
-      { error: error.message || 'Error interno del servidor' }, 
+      { error: error.message || 'Error interno del servidor al procesar con IA' }, 
       { status: 500 }
     );
   }
