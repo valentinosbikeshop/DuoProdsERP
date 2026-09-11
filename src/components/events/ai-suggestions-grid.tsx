@@ -1487,23 +1487,21 @@ export function AiSuggestionsGrid({
             className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
           />
         </TableCell>
-        {hasRetailSales && (
-          <TableCell className="p-2 align-middle text-center">
-            <button
-              type="button"
-              onClick={() => handleInputChange(item.id!, 'es_insumo', !(item.es_insumo ?? false), true)}
-              className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
-                (item.es_insumo ?? false)
-                  ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
-                  : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
-              }`}
-              title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
-              disabled={hasChildren}
-            >
-              {(item.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
-            </button>
-          </TableCell>
-        )}
+        <TableCell className="p-2 align-middle text-center">
+          <button
+            type="button"
+            onClick={() => handleInputChange(item.id!, 'es_insumo', !(item.es_insumo ?? false), true)}
+            className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
+              (item.es_insumo ?? false)
+                ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
+            }`}
+            title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
+            disabled={hasChildren}
+          >
+            {(item.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
+          </button>
+        </TableCell>
         <TableCell className="p-2 border-r">
           <div className="flex items-center gap-1.5 justify-center">
             <div className="relative">
@@ -1757,7 +1755,7 @@ export function AiSuggestionsGrid({
         <Table className="min-w-[1350px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
-              <TableHead colSpan={hasRetailSales ? 5 : 4} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
+              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
               <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
               <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
               <TableHead colSpan={2} className="text-center font-bold text-muted-foreground">RESUMEN</TableHead>
@@ -1766,9 +1764,7 @@ export function AiSuggestionsGrid({
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[280px] text-xs font-bold uppercase tracking-wider">Servicio / Insumo</TableHead>
               <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
-              {hasRetailSales && (
-                <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider text-center">Tipo</TableHead>
-              )}
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider text-center">Tipo</TableHead>
               <TableHead className="w-[135px] min-w-[135px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
