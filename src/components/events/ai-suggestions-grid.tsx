@@ -1213,7 +1213,10 @@ export function AiSuggestionsGrid({
             const itemsToInsert = validNewItems.map((ni: any) => {
               const c = Number(ni.costo) || 0;
               const rawDoc = String(ni.tipo_doc_costo || 'factura').toLowerCase();
-              const td = ['factura', 'boleta'].includes(rawDoc) ? rawDoc : 'factura';
+              const td = ['factura', 'boleta'].includes(rawDoc) ? rawDoc as 'factura' | 'boleta' : 'factura';
+              
+              const fin = calculateFinancials(c, 0, td, true, true);
+
               return {
                 event_id: eventId,
                 servicio: ni.servicio || 'Insumo',
@@ -1222,10 +1225,10 @@ export function AiSuggestionsGrid({
                 cantidad: Number(ni.cantidad) || 1,
                 costo: c,
                 ganancia: 0,
-                valor_neto: c,
-                iva: Math.round(c * 0.19),
-                valor_total: c + Math.round(c * 0.19),
-                margen: 0,
+                valor_neto: fin.valorNeto,
+                iva: fin.ivaDebito,
+                valor_total: fin.valorTotal,
+                margen: fin.margen,
                 tipo_doc_costo: td,
                 iva_incluido: true,
                 es_insumo: true,
