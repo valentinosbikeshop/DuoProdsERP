@@ -1258,7 +1258,7 @@ export function AiSuggestionsGrid({
 
               return {
                 event_id: eventId,
-                servicio: ni.servicio,
+                servicio: ni.servicio || 'Insumo generado',
                 detalle: ni.detalle || '',
                 tipo_evento: ni.tipo_evento || 'AI',
                 cantidad: ni.cantidad || 1,

@@ -15,8 +15,18 @@ interface Message {
 
 interface FloatingDraftAssistantProps {
   draftItems: EventItem[];
-  onApplyActions: (actions: any[]) => void;
+  onApplyActions: (actions: any[]) => void | Promise<void>;
 }
+
+const WELCOME_MESSAGE = `¡Hola! Soy tu Asistente de Borradores IA. Conozco todos los ítems, costos, detalles y jerarquías de esta lista.
+
+Puedo ayudarte con:
+• **Consolidar / Agrupar**: "agrupa las empanadas bajo el nombre Empanadas"
+• **Desagrupar**: "desarma el grupo de bebidas" o "saca el hielo del grupo"
+• **Reordenar**: "ordena por costo de mayor a menor" o "pon la comida primero"
+• **Invertir**: "cambia entre detalle y nombre en todos los ítems"
+• **Modificar**: "cambia el nombre de X a Y" o "ajusta el costo a $5.000"
+• **Facturas**: Adjunta un PDF o imagen de factura para extraer los ítems automáticamente.`;
 
 export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingDraftAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -24,7 +34,7 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: `¡Hola! Soy tu Asistente de Borradores IA. Puedo ayudarte a organizar esta lista. Pídeme que agrupe ítems (ej. "junta todo lo de comida") o adjunta una factura para que yo extraiga los ítems y los agregue como un grupo consolidado.`
+      content: WELCOME_MESSAGE
     }
   ]);
 
@@ -82,7 +92,8 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
       });
 
       if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Error HTTP: ${response.status}`);
       }
 
       const data = await response.json();
@@ -93,14 +104,15 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
       ]);
 
       if (data.actions && data.actions.length > 0) {
-        onApplyActions(data.actions);
+        await onApplyActions(data.actions);
       }
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in AI Draft Assistant:', error);
+      const errorMsg = error instanceof Error ? error.message : (typeof error === 'string' ? error : JSON.stringify(error));
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: 'Hubo un problema al procesar tu solicitud. Por favor intenta de nuevo.' }
+        { role: 'assistant', content: `⚠️ Hubo un problema: ${errorMsg || 'Error desconocido'}` }
       ]);
     } finally {
       setIsLoading(false);
@@ -122,7 +134,7 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
   const clearChat = () => {
     setMessages([{
       role: 'assistant',
-      content: `¡Hola! Soy tu Asistente de Borradores IA. Puedo ayudarte a organizar esta lista. Pídeme que agrupe ítems (ej. "junta todo lo de comida") o adjunta una factura para que yo extraiga los ítems y los agregue como un grupo consolidado.`
+      content: WELCOME_MESSAGE
     }]);
     setParsedText('');
   };
@@ -264,7 +276,7 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ej. Agrupa todo lo que sea comida..."
+                placeholder="Ej. Agrupa las empanadas, invierte nombre y detalle, reordena..."
                 className="w-full max-h-32 min-h-[40px] bg-transparent border-0 focus:ring-0 resize-none py-2 px-1 text-sm custom-scrollbar"
                 rows={1}
               />
