@@ -850,6 +850,13 @@ export function AiSuggestionsGrid({
     }
   };
 
+  const parseNumber = (val: any): number => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    const str = String(val).replace(/[^0-9,-]+/g, '').replace(',', '.');
+    return Number(str) || 0;
+  };
+
   const handleAssistantActions = async (actions: any[]) => {
     let newSuggestions = [...editableSuggestions];
     const affectedIds: string[] = [];
@@ -1114,9 +1121,9 @@ export function AiSuggestionsGrid({
 
             if (update.servicio !== undefined) item.servicio = update.servicio;
             if (update.detalle !== undefined) item.detalle = update.detalle;
-            if (update.cantidad !== undefined) item.cantidad = Number(update.cantidad) || 1;
-            if (update.costo !== undefined) item.costo = Number(update.costo) || 0;
-            if (update.ganancia !== undefined) item.ganancia = Number(update.ganancia) || 0;
+            if (update.cantidad !== undefined) item.cantidad = parseNumber(update.cantidad) || 1;
+            if (update.costo !== undefined) item.costo = parseNumber(update.costo) || 0;
+            if (update.ganancia !== undefined) item.ganancia = parseNumber(update.ganancia) || 0;
             if (update.tipo_doc_costo !== undefined) {
               const td = String(update.tipo_doc_costo).toLowerCase();
               item.tipo_doc_costo = ['factura', 'boleta'].includes(td) ? td as 'factura' | 'boleta' : 'factura';
@@ -1177,8 +1184,8 @@ export function AiSuggestionsGrid({
           if (isConsolidated) {
             let totalCost = 0;
             const validNewItems = newItemsArray.map((ni: any) => {
-              const c = Number(ni.costo) || 0;
-              const q = Number(ni.cantidad) || 1;
+              const c = parseNumber(ni.costo) || 0;
+              const q = parseNumber(ni.cantidad) || 1;
               totalCost += (c * q);
               return ni;
             });
@@ -1225,7 +1232,7 @@ export function AiSuggestionsGrid({
                 servicio: ni.servicio || 'Insumo',
                 detalle: ni.detalle || '',
                 tipo_evento: 'Insumo',
-                cantidad: Number(ni.cantidad) || 1,
+                cantidad: parseNumber(ni.cantidad) || 1,
                 costo: c,
                 ganancia: 0,
                 valor_neto: fin.valorNeto,
@@ -1255,8 +1262,8 @@ export function AiSuggestionsGrid({
           } else {
             // Ítems sueltos independientes
             const itemsToInsert = newItemsArray.map((ni: any) => {
-              const costo = Number(ni.costo) || 0;
-              const ganancia = Number(ni.ganancia) || Math.round(costo * 0.2);
+              const costo = parseNumber(ni.costo) || 0;
+              const ganancia = parseNumber(ni.ganancia) || Math.round(costo * 0.2);
               const rawDoc = String(ni.tipo_doc_costo || 'factura').toLowerCase();
               const tipoDoc = ['factura', 'boleta'].includes(rawDoc) ? rawDoc as 'factura' | 'boleta' : 'factura';
               const esInsumo = Boolean(ni.es_insumo ?? false);
@@ -1267,7 +1274,7 @@ export function AiSuggestionsGrid({
                 servicio: ni.servicio || 'Insumo generado',
                 detalle: ni.detalle || '',
                 tipo_evento: ni.tipo_evento || 'AI',
-                cantidad: ni.cantidad || 1,
+                cantidad: parseNumber(ni.cantidad) || 1,
                 costo,
                 ganancia,
                 valor_neto: fin.valorNeto,

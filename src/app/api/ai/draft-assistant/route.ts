@@ -179,10 +179,10 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
                     id: { type: Type.STRING },
                     servicio: { type: Type.STRING },
                     detalle: { type: Type.STRING },
-                    cantidad: { type: Type.NUMBER },
-                    costo: { type: Type.NUMBER },
-                    ganancia: { type: Type.NUMBER },
-                    tipo_doc_costo: { type: Type.STRING, enum: ['factura', 'boleta'] },
+                    cantidad: { type: Type.STRING, description: 'Puede ser número o texto' },
+                    costo: { type: Type.STRING, description: 'Puede ser número o texto (ej. $10.000)' },
+                    ganancia: { type: Type.STRING },
+                    tipo_doc_costo: { type: Type.STRING, description: "'factura' o 'boleta'" },
                     es_insumo: { type: Type.BOOLEAN }
                   },
                   required: ['id']
@@ -196,10 +196,10 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
                   properties: {
                     servicio: { type: Type.STRING },
                     detalle: { type: Type.STRING },
-                    cantidad: { type: Type.NUMBER },
-                    costo: { type: Type.NUMBER },
-                    ganancia: { type: Type.NUMBER },
-                    tipo_doc_costo: { type: Type.STRING, enum: ['factura', 'boleta'] },
+                    cantidad: { type: Type.STRING, description: 'Puede ser número o texto' },
+                    costo: { type: Type.STRING, description: 'Puede ser número o texto (ej. $10.000)' },
+                    ganancia: { type: Type.STRING },
+                    tipo_doc_costo: { type: Type.STRING, description: "'factura' o 'boleta'" },
                     es_insumo: { type: Type.BOOLEAN }
                   },
                   required: ['servicio']
