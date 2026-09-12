@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
                 }
               },
               {
-                text: "Analiza profundamente esta imagen y extrae todo el texto relevante, tablas y datos. IMPORTANTE: Si detectas que los ítems mostrados pertenecen a una categoría, receta, plato o grupo específico (por ejemplo, un listado de ingredientes bajo el título 'Empanadas' o '1. Empanadas', equipos para 'Iluminación', etc.), indica CLARAMENTE ese nombre de grupo o título principal al inicio de tu respuesta. Luego, estructura detalladamente los ítems, cantidades y precios/costos si los hay."
+                text: "Analiza profundamente esta imagen y extrae todo el texto relevante, tablas y datos. IMPORTANTE: Si detectas que los ítems mostrados pertenecen a una categoría, receta, plato o grupo específico (por ejemplo, un listado de ingredientes bajo el título 'Empanadas' o '1. Empanadas', equipos para 'Iluminación', etc.), indica CLARAMENTE ese nombre de grupo o título principal al inicio de tu respuesta. Luego, estructura detalladamente los ítems, cantidades, precios/costos y cualquier observación tributaria (si fue comprado con Factura o Boleta)."
               }
             ]
           }
