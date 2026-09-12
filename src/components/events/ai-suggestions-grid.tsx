@@ -100,7 +100,7 @@ export function AiSuggestionsGrid({
     if (!targetItem) return;
 
     let newValue = value;
-    if (['costo', 'ganancia', 'cantidad', 'valor_total'].includes(field)) {
+    if (['costo', 'costo_total', 'ganancia', 'cantidad', 'valor_total'].includes(field)) {
       newValue = parseFloat(value) || 0;
     }
 
@@ -112,6 +112,11 @@ export function AiSuggestionsGrid({
       } else if (updatedItem.ganancia === 0 && updatedItem.costo > 0) {
         updatedItem.ganancia = Math.round(updatedItem.costo * 0.2);
       }
+    }
+
+    if (field === 'costo_total') {
+      const qty = (updatedItem.cantidad || 1) > 0 ? (updatedItem.cantidad || 1) : 1;
+      updatedItem.costo = newValue / qty;
     }
 
     const currentTipoDoc = (updatedItem.tipo_doc_costo || 'factura') as 'factura' | 'boleta';
@@ -133,7 +138,7 @@ export function AiSuggestionsGrid({
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.ivaDebito;
       updatedItem.margen = financials.margen;
-    } else if (['costo', 'ganancia', 'sin_ganancia', 'tipo_doc_costo', 'iva_incluido', 'es_insumo'].includes(field)) {
+    } else if (['costo', 'costo_total', 'ganancia', 'sin_ganancia', 'tipo_doc_costo', 'iva_incluido', 'es_insumo'].includes(field)) {
       const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia, currentTipoDoc, currentIvaIncluido, currentEsInsumo);
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.ivaDebito;
@@ -1549,19 +1554,45 @@ export function AiSuggestionsGrid({
         {/* EGRESOS */}
         <TableCell className="p-2 bg-red-50/30">
           <div className="flex flex-col gap-1 w-full">
-            <Input
-              type="number"
-              value={item.costo}
-              onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
-              onBlur={(e) => handleBlur(item.id!, e)}
-              className="h-8 text-sm w-full px-2"
-              disabled={hasChildren} 
-              title={hasChildren ? "Costo unitario resultante (Total insumos ÷ Unidades a la venta)" : "Costo unitario"}
-            />
-            {hasChildren && (
-              <span className="text-[10px] text-red-700 font-semibold text-center whitespace-nowrap" title="Costo total de insumos consolidados">
-                Total: {formatCLP(item.costo * item.cantidad)}
-              </span>
+            {hasChildren ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[9px] font-bold text-red-800 uppercase tracking-wider pl-1">Costo Unitario Resultante</span>
+                <Input
+                  type="number"
+                  value={item.costo}
+                  className="h-8 text-sm w-full px-2"
+                  disabled={true} 
+                  title="Costo unitario resultante (Total insumos ÷ Unidades a la venta)"
+                />
+                <span className="text-[10px] text-red-700 font-semibold text-center whitespace-nowrap mt-1" title="Costo total de insumos consolidados">
+                  Total consolidado: {formatCLP(item.costo * item.cantidad)}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <span className="text-[9px] font-bold text-red-800/70 uppercase tracking-wider pl-1 text-center">Unitario</span>
+                  <Input
+                    type="number"
+                    value={Number(item.costo.toFixed(0))}
+                    onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
+                    onBlur={(e) => handleBlur(item.id!, e)}
+                    className="h-8 text-xs w-full px-1 text-center"
+                    title="Costo unitario"
+                  />
+                </div>
+                <div className="flex-1 flex flex-col gap-0.5">
+                  <span className="text-[9px] font-bold text-red-800/70 uppercase tracking-wider pl-1 text-center">Total</span>
+                  <Input
+                    type="number"
+                    value={Number((item.costo * (item.cantidad || 1)).toFixed(0))}
+                    onChange={(e) => handleInputChange(item.id!, 'costo_total', e.target.value)}
+                    onBlur={(e) => handleBlur(item.id!, e)}
+                    className="h-8 text-xs w-full px-1 text-center font-semibold bg-white"
+                    title="Costo total (Unitario × Cantidad)"
+                  />
+                </div>
+              </div>
             )}
             <div className="flex items-center gap-1 w-full">
               <button
