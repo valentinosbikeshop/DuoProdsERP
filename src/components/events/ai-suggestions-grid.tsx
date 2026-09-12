@@ -1128,7 +1128,7 @@ export function AiSuggestionsGrid({
               const td = String(update.tipo_doc_costo).toLowerCase();
               item.tipo_doc_costo = ['factura', 'boleta'].includes(td) ? td as 'factura' | 'boleta' : 'factura';
             }
-            if (update.es_insumo !== undefined) item.es_insumo = Boolean(update.es_insumo);
+            if (update.es_insumo !== undefined) item.es_insumo = String(update.es_insumo).toLowerCase() === 'true' || update.es_insumo === true;
 
             const fin = calculateFinancials(
               item.costo, 
@@ -1266,7 +1266,7 @@ export function AiSuggestionsGrid({
               const ganancia = parseNumber(ni.ganancia) || Math.round(costo * 0.2);
               const rawDoc = String(ni.tipo_doc_costo || 'factura').toLowerCase();
               const tipoDoc = ['factura', 'boleta'].includes(rawDoc) ? rawDoc as 'factura' | 'boleta' : 'factura';
-              const esInsumo = Boolean(ni.es_insumo ?? false);
+              const esInsumo = String(ni.es_insumo ?? 'false').toLowerCase() === 'true' || ni.es_insumo === true;
               const fin = calculateFinancials(costo, ganancia, tipoDoc, true, esInsumo);
 
               return {

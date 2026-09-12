@@ -179,11 +179,11 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
                     id: { type: Type.STRING },
                     servicio: { type: Type.STRING },
                     detalle: { type: Type.STRING },
-                    cantidad: { type: Type.STRING, description: 'Puede ser número o texto' },
-                    costo: { type: Type.STRING, description: 'Puede ser número o texto (ej. $10.000)' },
+                    cantidad: { type: Type.STRING },
+                    costo: { type: Type.STRING },
                     ganancia: { type: Type.STRING },
-                    tipo_doc_costo: { type: Type.STRING, description: "'factura' o 'boleta'" },
-                    es_insumo: { type: Type.BOOLEAN }
+                    tipo_doc_costo: { type: Type.STRING },
+                    es_insumo: { type: Type.STRING }
                   },
                   required: ['id']
                 },
@@ -196,11 +196,11 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
                   properties: {
                     servicio: { type: Type.STRING },
                     detalle: { type: Type.STRING },
-                    cantidad: { type: Type.STRING, description: 'Puede ser número o texto' },
-                    costo: { type: Type.STRING, description: 'Puede ser número o texto (ej. $10.000)' },
+                    cantidad: { type: Type.STRING },
+                    costo: { type: Type.STRING },
                     ganancia: { type: Type.STRING },
-                    tipo_doc_costo: { type: Type.STRING, description: "'factura' o 'boleta'" },
-                    es_insumo: { type: Type.BOOLEAN }
+                    tipo_doc_costo: { type: Type.STRING },
+                    es_insumo: { type: Type.STRING }
                   },
                   required: ['servicio']
                 },
@@ -211,7 +211,7 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
                 description: 'Para ADD_ITEMS: si se agrupan bajo un nuevo consolidado' 
               }
             },
-            required: ['type']
+            required: ['type', 'parentName', 'parentDetail', 'parentId', 'parentQuantity', 'itemIds', 'orderedIds', 'updates', 'newItems', 'asConsolidated']
           }
         }
       },
