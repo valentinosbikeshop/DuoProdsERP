@@ -136,8 +136,9 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
 - En 'reply', sé cordial, ejecutivo y resume con total precisión lo que hiciste.
 - ¡ANÁLISIS PROFUNDO DE DOCUMENTOS E IMÁGENES!: Cuando recibas un [DOCUMENTO O FACTURA ADJUNTA], analízalo de manera muy inteligente y detallada. Extrae absolutamente toda la información posible.
   * Agrupación: Si el documento tiene títulos, recetas o centros de producción (ej. "1. Empanadas", "2. Sopaipillas"), agrupa los ítems bajo ese título exacto usando ADD_ITEMS con asConsolidated=true y el título como 'parentName'. NO hardcodees nombres. Repite la acción ADD_ITEMS para cada grupo distinto que encuentres en el documento.
-  * Tipo de Documento Tributario: Analiza cualquier columna de "Observación Tributaria", notas o texto que indique si la compra fue con Factura o Boleta (ej. "Prorrateo Boleta", "Factura", "Boleta"). Asigna ESTRICTAMENTE ese valor al campo 'tipo_doc_costo' ('factura' o 'boleta') de cada ítem. Si no dice nada, asume 'factura'.
-  * Completitud: Asegúrate de incluir el detalle, cantidad, costo (precio) y toda la información disponible para cada ítem de manera satisfactoria.
+  * Extracción Obligatoria: Los ítems extraídos DEBEN ir dentro de la propiedad 'newItems' de la acción ADD_ITEMS como un arreglo de objetos. ¡NO lo omitas!
+  * Tipo de Documento Tributario: Analiza cualquier columna de "Observación Tributaria", notas o texto que indique si la compra fue con Factura o Boleta (ej. "Prorrateo Boleta", "Factura", "Boleta"). Asigna ESTRICTAMENTE ese valor al campo 'tipo_doc_costo' ('factura' o 'boleta') de cada ítem en 'newItems'. Si no dice nada, asume 'factura'.
+  * Completitud: Asegúrate de incluir el detalle, cantidad, costo (precio total) y toda la información disponible para cada ítem de manera satisfactoria dentro del arreglo 'newItems'.
 - ¡REGLA FUNDAMENTAL PARA CONSOLIDATE!: Al generar una acción 'CONSOLIDATE', es ESTRICTAMENTE OBLIGATORIO incluir el campo 'itemIds' con los IDs exactos de los ítems a agrupar. ¡NUNCA lo omitas ni lo dejes vacío!
 - Si el usuario dice "cambia el detalle por el nombre" o viceversa, genera la acción SWAP_NAME_DETAIL con los itemIds respectivos.
 - Si no hay acciones que realizar, devuelve 'actions': [].`;

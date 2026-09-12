@@ -1165,9 +1165,12 @@ export function AiSuggestionsGrid({
         }
 
         // 6. AGREGAR NUEVOS ÍTEMS (ADD_ITEMS o ADD_FROM_INVOICE)
-        else if ((action.type === 'ADD_ITEMS' || action.type === 'ADD_FROM_INVOICE') && action.newItems) {
-          const newItemsArray = Array.isArray(action.newItems) ? action.newItems : [action.newItems];
-          if (newItemsArray.length === 0) continue;
+        else if (action.type === 'ADD_ITEMS' || action.type === 'ADD_FROM_INVOICE') {
+          if (!action.newItems || !Array.isArray(action.newItems) || action.newItems.length === 0) {
+            alert(`El asistente intentó agregar ítems bajo "${action.parentName || 'Grupo'}" pero omitió la lista de ítems. Intenta nuevamente.`);
+            continue;
+          }
+          const newItemsArray = action.newItems;
 
           const isConsolidated = action.asConsolidated ?? (action.type === 'ADD_FROM_INVOICE' || !!action.parentName);
 
@@ -1304,8 +1307,9 @@ export function AiSuggestionsGrid({
           setSelectedIds(prev => prev.filter(selId => !idsToRemove.includes(selId)));
         }
 
-      } catch (actionErr) {
+      } catch (actionErr: any) {
         console.error(`Error ejecutando acción AI ${action.type}:`, actionErr);
+        alert(`Error procesando los cambios sugeridos por el asistente: ${actionErr?.message || actionErr}`);
       }
     }
 
