@@ -97,14 +97,14 @@ export function FileUpload({ onParsed, disabled }: FileUploadProps) {
           <div>
             <p className="font-medium text-sm">Haz clic o arrastra un archivo aquí</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Soporta PDF, XLSX, CSV (Max. 10MB)
+              Soporta Imágenes, PDF, Excel, CSV (Max. 10MB)
             </p>
           </div>
           <input
             type="file"
             ref={fileInputRef}
             className="hidden"
-            accept=".pdf,.xlsx,.xls,.csv"
+            accept=".pdf,.xlsx,.xls,.csv,image/*"
             onChange={handleFileChange}
             disabled={disabled}
           />

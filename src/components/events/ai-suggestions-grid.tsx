@@ -1814,22 +1814,20 @@ export function AiSuggestionsGrid({
                   className="h-8 text-sm w-full bg-background/90"
                 />
               </TableCell>
-              {hasRetailSales && (
-                <TableCell className="p-2 align-middle text-center">
-                  <button
-                    type="button"
-                    onClick={() => handleInputChange('manual', 'es_insumo', !(manualItem.es_insumo ?? false))}
-                    className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
-                      (manualItem.es_insumo ?? false)
-                        ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
-                        : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
-                    }`}
-                    title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
-                  >
-                    {(manualItem.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
-                  </button>
-                </TableCell>
-              )}
+              <TableCell className="p-2 align-middle text-center">
+                <button
+                  type="button"
+                  onClick={() => handleInputChange('manual', 'es_insumo', !(manualItem.es_insumo ?? false))}
+                  className={`text-[9px] px-1.5 py-0.5 rounded cursor-pointer border font-bold uppercase tracking-wider transition-colors ${
+                    (manualItem.es_insumo ?? false)
+                      ? 'bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-200'
+                      : 'bg-indigo-100 text-indigo-800 border-indigo-200 hover:bg-indigo-200'
+                  }`}
+                  title="¿Es un insumo (solo costo) o un producto de venta (con ganancia)?"
+                >
+                  {(manualItem.es_insumo ?? false) ? 'INSUMO' : 'VENTA'}
+                </button>
+              </TableCell>
               <TableCell className="p-2 border-r">
                 <Input
                   type="number"
@@ -2001,7 +1999,7 @@ export function AiSuggestionsGrid({
             <TableFooter>
               {/* Fila 1: Productos Facturables */}
               <TableRow className="bg-emerald-50/10 font-semibold border-b">
-                <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
+                <TableCell colSpan={5} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totalesFacturables.costo)}</TableCell>
@@ -2019,7 +2017,7 @@ export function AiSuggestionsGrid({
               {/* Fila 2: Insumos / Costos Operativos */}
               {totalesInsumos.costo > 0 && (
                 <TableRow className="bg-red-50/10 font-semibold border-b">
-                  <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
+                  <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
                   <TableCell className="bg-red-50/20"></TableCell>
                   <TableCell className="bg-red-50/20"></TableCell>
                   <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700">{formatCLP(totalesInsumos.costo)}</TableCell>
@@ -2033,7 +2031,7 @@ export function AiSuggestionsGrid({
 
               {/* Fila 3: Gran Total / Utilidad Neta */}
               <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
-                <TableCell colSpan={hasRetailSales ? 5 : 4} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
+                <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
                 <TableCell className="bg-red-50/40"></TableCell>
                 <TableCell className="bg-red-50/40"></TableCell>
                 <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-base">{formatCLP(costoTotalGlobal)}</TableCell>

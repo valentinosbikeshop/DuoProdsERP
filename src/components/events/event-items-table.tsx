@@ -906,7 +906,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
         <Table className="min-w-[1350px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
-              <TableHead colSpan={hasRetailSales ? 5 : 4} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
+              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
               <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
               <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
               <TableHead colSpan={isCompleted ? 2 : 3} className="text-center font-bold text-muted-foreground">RESUMEN Y GESTIÓN</TableHead>
@@ -915,9 +915,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
               <TableHead className="w-[40px]"></TableHead>
               <TableHead className="min-w-[280px] text-xs font-bold uppercase tracking-wider">Servicio</TableHead>
               <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
-              {hasRetailSales && (
-                <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">Tipo</TableHead>
-              )}
+              <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">Tipo</TableHead>
               <TableHead className="w-[135px] min-w-[135px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
@@ -952,7 +950,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
           <TableFooter>
             {/* Fila 1: Productos Facturables */}
             <TableRow className="bg-emerald-50/10 font-semibold border-b">
-              <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
+              <TableCell colSpan={5} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
               <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totalesFacturables.costo)}</TableCell>
@@ -970,7 +968,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
             {/* Fila 2: Insumos / Costos Operativos */}
             {totalesInsumos.costo > 0 && (
               <TableRow className="bg-red-50/10 font-semibold border-b">
-                <TableCell colSpan={hasRetailSales ? 5 : 4} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
+                <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700">{formatCLP(totalesInsumos.costo)}</TableCell>
@@ -984,7 +982,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
 
             {/* Fila 3: Gran Total / Utilidad Neta */}
             <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
-              <TableCell colSpan={hasRetailSales ? 5 : 4} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
+              <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
               <TableCell className="bg-red-50/40"></TableCell>
               <TableCell className="bg-red-50/40"></TableCell>
               <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-base">{formatCLP(costoTotalGlobal)}</TableCell>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import pdf from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import { createServerClient } from '@supabase/ssr';
+import { GoogleGenAI } from '@google/genai';
 
 export const runtime = 'nodejs';
 
@@ -12,9 +13,13 @@ const ALLOWED_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
   'text/csv',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic'
 ]);
 
-const ALLOWED_EXTENSIONS = new Set(['.pdf', '.xlsx', '.xls', '.csv']);
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.xlsx', '.xls', '.csv', '.jpg', '.jpeg', '.png', '.webp', '.heic']);
 
 // Verify the request comes from an authenticated user
 async function verifyAuth(req: NextRequest) {
@@ -64,7 +69,7 @@ export async function POST(req: NextRequest) {
     // File type validation
     if (!ALLOWED_TYPES.has(fileType) && !ALLOWED_EXTENSIONS.has(extension)) {
       return NextResponse.json(
-        { error: 'Formato de archivo no soportado. Use PDF, XLSX, XLS o CSV.' },
+        { error: 'Formato de archivo no soportado. Use PDF, XLSX, CSV o Imágenes (JPG, PNG, WEBP).' },
         { status: 400 }
       );
     }
@@ -93,6 +98,35 @@ export async function POST(req: NextRequest) {
         return `--- Sheet: ${sheetName} ---\n` + XLSX.utils.sheet_to_csv(sheet);
       }).join('\n\n');
     } 
+    else if (fileType.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.heic'].some(ext => fileName.endsWith(ext))) {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const base64Data = buffer.toString('base64');
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                inlineData: {
+                  data: base64Data,
+                  mimeType: fileType || 'image/jpeg',
+                }
+              },
+              {
+                text: "Analiza profundamente esta imagen y extrae todo el texto relevante, tablas y datos. IMPORTANTE: Si detectas que los ítems mostrados pertenecen a una categoría, receta, plato o grupo específico (por ejemplo, un listado de ingredientes bajo el título 'Empanadas' o '1. Empanadas', equipos para 'Iluminación', etc.), indica CLARAMENTE ese nombre de grupo o título principal al inicio de tu respuesta. Luego, estructura detalladamente los ítems, cantidades y precios/costos si los hay."
+              }
+            ]
+          }
+        ],
+        config: {
+          temperature: 0.1,
+        }
+      });
+      
+      text = response.text || '';
+    }
     else {
       return NextResponse.json({ error: 'Unsupported file format' }, { status: 400 });
     }

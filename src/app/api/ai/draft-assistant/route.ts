@@ -131,12 +131,13 @@ CAPACIDADES Y ACCIONES DISPONIBLES QUE PUEDES EJECUTAR:
 7. DELETE_ITEMS: Elimina ítems obsoletos, duplicados o no deseados del borrador.
    - Requiere: 'itemIds' (arreglo con los IDs exactos a borrar).
 
-REGLAS DE INTERACCIÓN:
+REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
 - Responde siempre con el esquema JSON indicado.
-- En 'reply', sé cordial, ejecutivo y resume con total precisión lo que hiciste (o solicita confirmación breve si una solicitud es ambigua).
-- ¡REGLA FUNDAMENTAL PARA CONSOLIDATE!: Al generar una acción 'CONSOLIDATE', es ESTRICTAMENTE OBLIGATORIO incluir el campo 'itemIds' con los IDs exactos de los ítems a agrupar. ¡NUNCA lo omitas ni lo dejes vacío! Ejemplo: si el usuario pide agrupar empanadas, debes poner en 'itemIds' los IDs de cada una de las empanadas existentes (ej. ["id-1", "id-2"]).
+- En 'reply', sé cordial, ejecutivo y resume con total precisión lo que hiciste.
+- ¡ANÁLISIS PROFUNDO DE DOCUMENTOS E IMÁGENES!: Cuando recibas un [DOCUMENTO O FACTURA ADJUNTA], analízalo de manera muy inteligente. Si el usuario te pide extraer y organizar los datos, detecta automáticamente si el documento tiene un título principal (ej. "1. Empanadas", "Equipos de Iluminación"). Si es así, agrupa los ítems (ADD_ITEMS con asConsolidated=true) y utiliza ESE TÍTULO EXACTO que inferiste como 'parentName'. NUNCA hardcodees nombres de grupos; siempre despende de la información dentro del documento.
+- ¡REGLA FUNDAMENTAL PARA CONSOLIDATE!: Al generar una acción 'CONSOLIDATE', es ESTRICTAMENTE OBLIGATORIO incluir el campo 'itemIds' con los IDs exactos de los ítems a agrupar. ¡NUNCA lo omitas ni lo dejes vacío!
 - Si el usuario dice "cambia el detalle por el nombre" o viceversa, genera la acción SWAP_NAME_DETAIL con los itemIds respectivos.
-- Si no hay acciones que realizar (solo fue una duda o pregunta informativa), devuelve 'actions': [].`;
+- Si no hay acciones que realizar, devuelve 'actions': [].`;
 
     const responseSchema = {
       type: Type.OBJECT,

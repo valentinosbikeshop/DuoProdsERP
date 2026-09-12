@@ -26,7 +26,7 @@ Puedo ayudarte con:
 • **Reordenar**: "ordena por costo de mayor a menor" o "pon la comida primero"
 • **Invertir**: "cambia entre detalle y nombre en todos los ítems"
 • **Modificar**: "cambia el nombre de X a Y" o "ajusta el costo a $5.000"
-• **Facturas**: Adjunta un PDF o imagen de factura para extraer los ítems automáticamente.`;
+• **Facturas e Imágenes**: Adjunta un PDF, foto o imagen de cotización/factura para extraer y organizar los ítems automáticamente.`;
 
 export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingDraftAssistantProps) {
   const [isOpen, setIsOpen] = useState(false);

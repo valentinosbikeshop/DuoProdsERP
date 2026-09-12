@@ -64,7 +64,8 @@ export default function EventDetailPage() {
       const { data: itemsData, error: itemsError } = await supabase
         .from('event_items')
         .select('*')
-        .eq('event_id', id);
+        .eq('event_id', id)
+        .order('created_at', { ascending: true });
         
       if (itemsError) throw itemsError;
       
