@@ -63,6 +63,7 @@ export function AiSuggestionsGrid({
   const [distributeOpen, setDistributeOpen] = useState(false);
   const [distributeItem, setDistributeItem] = useState<EventItem | null>(null);
   const [highlightedIds, setHighlightedIds] = useState<string[]>([]);
+  const [mermas, setMermas] = useState<number>(0);
   const supabase = createClient();
   
   useDragAutoScroll({ isDragging: !!draggedItemId });
@@ -1371,7 +1372,9 @@ export function AiSuggestionsGrid({
 
   const costoTotalGlobal = totalesFacturables.costo + totalesInsumos.costo;
   const utilidadNeta = totalesFacturables.ganancia - totalesInsumos.costo;
-  const margenReal = costoTotalGlobal > 0 ? (utilidadNeta / costoTotalGlobal) * 100 : 0;
+  const montoMermas = Math.max(0, utilidadNeta * (mermas / 100));
+  const utilidadFinal = utilidadNeta - montoMermas;
+  const margenFinal = costoTotalGlobal > 0 ? (utilidadFinal / costoTotalGlobal) * 100 : 0;
 
   const renderRow = (item: EventItem, index: number, isChild: boolean = false) => {
     const isSelected = selectedIds.includes(item.id!);
@@ -1554,45 +1557,19 @@ export function AiSuggestionsGrid({
         {/* EGRESOS */}
         <TableCell className="p-2 bg-red-50/30">
           <div className="flex flex-col gap-1 w-full">
-            {hasChildren ? (
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[9px] font-bold text-red-800 uppercase tracking-wider pl-1">Costo Unitario Resultante</span>
-                <Input
-                  type="number"
-                  value={item.costo}
-                  className="h-8 text-sm w-full px-2"
-                  disabled={true} 
-                  title="Costo unitario resultante (Total insumos ÷ Unidades a la venta)"
-                />
-                <span className="text-[10px] text-red-700 font-semibold text-center whitespace-nowrap mt-1" title="Costo total de insumos consolidados">
-                  Total consolidado: {formatCLP(item.costo * item.cantidad)}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                <div className="flex-1 flex flex-col gap-0.5">
-                  <span className="text-[9px] font-bold text-red-800/70 uppercase tracking-wider pl-1 text-center">Unitario</span>
-                  <Input
-                    type="number"
-                    value={Number(item.costo.toFixed(0))}
-                    onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
-                    onBlur={(e) => handleBlur(item.id!, e)}
-                    className="h-8 text-xs w-full px-1 text-center"
-                    title="Costo unitario"
-                  />
-                </div>
-                <div className="flex-1 flex flex-col gap-0.5">
-                  <span className="text-[9px] font-bold text-red-800/70 uppercase tracking-wider pl-1 text-center">Total</span>
-                  <Input
-                    type="number"
-                    value={Number((item.costo * (item.cantidad || 1)).toFixed(0))}
-                    onChange={(e) => handleInputChange(item.id!, 'costo_total', e.target.value)}
-                    onBlur={(e) => handleBlur(item.id!, e)}
-                    className="h-8 text-xs w-full px-1 text-center font-semibold bg-white"
-                    title="Costo total (Unitario × Cantidad)"
-                  />
-                </div>
-              </div>
+            <Input
+              type="number"
+              value={Number(item.costo.toFixed(0))}
+              onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
+              onBlur={(e) => handleBlur(item.id!, e)}
+              className="h-8 text-sm w-full px-2"
+              disabled={hasChildren} 
+              title={hasChildren ? "Costo unitario resultante (Total insumos ÷ Unidades a la venta)" : "Costo unitario"}
+            />
+            {hasChildren && (
+              <span className="text-[10px] text-red-700 font-semibold text-center whitespace-nowrap" title="Costo total de insumos consolidados">
+                Total: {formatCLP(item.costo * item.cantidad)}
+              </span>
             )}
             <div className="flex items-center gap-1 w-full">
               <button
@@ -1631,7 +1608,20 @@ export function AiSuggestionsGrid({
              return formatCLP(fin.ivaCredito * item.cantidad);
           })()}
         </TableCell>
-        <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(item.costo * item.cantidad)}</TableCell>
+        <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">
+          {hasChildren ? (
+            <span>{formatCLP(item.costo * item.cantidad)}</span>
+          ) : (
+            <Input
+              type="number"
+              value={Number((item.costo * (item.cantidad || 1)).toFixed(0))}
+              onChange={(e) => handleInputChange(item.id!, 'costo_total', e.target.value)}
+              onBlur={(e) => handleBlur(item.id!, e)}
+              className="h-8 text-sm w-full px-1 text-right font-bold text-red-700"
+              title="Costo total (Modificar para recalcular el Costo Unitario)"
+            />
+          )}
+        </TableCell>
 
         {/* INGRESOS */}
         {(item.es_insumo ?? false) ? (
@@ -2071,7 +2061,37 @@ export function AiSuggestionsGrid({
                 </TableRow>
               )}
 
-              {/* Fila 3: Gran Total / Utilidad Neta */}
+              {/* Fila 3: Mermas (Opcional) */}
+              <TableRow className="bg-amber-50/20 font-semibold border-b">
+                <TableCell colSpan={5} className="font-bold text-right border-r text-amber-900/80">
+                  <div className="flex items-center justify-end gap-2">
+                    <span>(-) Descuento por Mermas / Imprevistos:</span>
+                    <div className="flex items-center">
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={mermas || ''}
+                        onChange={(e) => setMermas(Number(e.target.value))}
+                        className="h-7 w-14 text-xs px-1 text-center font-bold"
+                        placeholder="0"
+                      />
+                      <span className="text-xs ml-1 text-amber-800">%</span>
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell className="bg-red-50/20"></TableCell>
+                <TableCell className="bg-red-50/20"></TableCell>
+                <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700"></TableCell>
+                <TableCell colSpan={5} className="bg-amber-50/30 text-right text-amber-900 pr-4">
+                  Monto Mermas: <span className="font-bold">{formatCLP(montoMermas)}</span>
+                </TableCell>
+                <TableCell className="bg-amber-50/30 border-r"></TableCell>
+                <TableCell className="bg-amber-50/30 border-r"></TableCell>
+                <TableCell colSpan={1}></TableCell>
+              </TableRow>
+
+              {/* Fila 4: Gran Total / Utilidad Final */}
               <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
                 <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider">RESUMEN GLOBAL (Rentabilidad Real):</TableCell>
                 <TableCell className="bg-red-50/40"></TableCell>
@@ -2079,16 +2099,16 @@ export function AiSuggestionsGrid({
                 <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-base">{formatCLP(costoTotalGlobal)}</TableCell>
                 
                 <TableCell colSpan={5} className="bg-emerald-50/40 text-right text-emerald-900 pr-4">
-                  Utilidad Neta (Ingresos - TODOS los Costos): 
-                  <span className={`ml-2 text-base ${utilidadNeta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                    {formatCLP(utilidadNeta)}
+                  Utilidad Neta Final (Ingresos - Costos - Mermas): 
+                  <span className={`ml-2 text-base ${utilidadFinal >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                    {formatCLP(utilidadFinal)}
                   </span>
                 </TableCell>
                 <TableCell className="bg-emerald-50/40 border-r text-right font-black text-emerald-800 text-lg">
                   {formatCLP(totalesFacturables.valor_total)}
                 </TableCell>
                 
-                <TableCell className="text-center font-black text-primary text-base border-r">{formatPercentage(margenReal)}</TableCell>
+                <TableCell className="text-center font-black text-primary text-base border-r">{formatPercentage(margenFinal)}</TableCell>
                 <TableCell colSpan={1}></TableCell>
               </TableRow>
             </TableFooter>
