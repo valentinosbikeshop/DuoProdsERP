@@ -1919,7 +1919,17 @@ export function AiSuggestionsGrid({
                   return formatCLP(fin.ivaCredito);
                 })()}
               </TableCell>
-              <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">{formatCLP(manualItem.costo * manualItem.cantidad)}</TableCell>
+              <TableCell className="p-2 align-top text-right font-bold text-red-700 bg-red-50/30 border-r">
+                <Input
+                  type="number"
+                  value={Number((manualItem.costo * (manualItem.cantidad || 1)).toFixed(0)) || ''}
+                  onChange={(e) => handleInputChange('manual', 'costo_total', e.target.value)}
+                  onBlur={(e) => handleBlur('manual', e)}
+                  className="h-8 text-sm w-full px-1 text-right font-bold text-red-700 bg-background/90"
+                  placeholder="0"
+                  title="Costo total (Modificar para recalcular el Costo Unitario)"
+                />
+              </TableCell>
 
               {/* INGRESOS MANUAL */}
               {(manualItem.es_insumo ?? false) ? (
