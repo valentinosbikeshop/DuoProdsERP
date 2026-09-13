@@ -16,7 +16,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork, GripVertical } from 'lucide-react';
+import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork, GripVertical, Undo2, Redo2 } from 'lucide-react';
 import { useDragAutoScroll } from '@/hooks/use-drag-auto-scroll';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
@@ -44,6 +44,11 @@ const emptySuggestion: AiSuggestion = {
   sin_ganancia: false,
 };
 
+type GridAction = 
+  | { type: 'UPDATE'; oldItem: EventItem; newItem: EventItem }
+  | { type: 'DELETE'; item: EventItem }
+  | { type: 'ADD'; item: EventItem };
+
 export function AiSuggestionsGrid({
   draftItems = [],
   eventId,
@@ -64,6 +69,9 @@ export function AiSuggestionsGrid({
   const [distributeItem, setDistributeItem] = useState<EventItem | null>(null);
   const [highlightedIds, setHighlightedIds] = useState<string[]>([]);
   const [mermas, setMermas] = useState<number>(0);
+  const [undoStack, setUndoStack] = useState<GridAction[]>([]);
+  const [redoStack, setRedoStack] = useState<GridAction[]>([]);
+  const [focusedItemState, setFocusedItemState] = useState<EventItem | null>(null);
   const supabase = createClient();
   
   useDragAutoScroll({ isDragging: !!draggedItemId });
@@ -71,6 +79,82 @@ export function AiSuggestionsGrid({
   useEffect(() => {
     setEditableSuggestions(draftItems);
   }, [draftItems]);
+
+  const pushUndoAction = useCallback((action: GridAction) => {
+    setUndoStack(prev => [...prev, action]);
+    setRedoStack([]);
+  }, []);
+
+  const handleUndo = useCallback(async () => {
+    if (undoStack.length === 0) return;
+    const action = undoStack[undoStack.length - 1];
+    try {
+      if (action.type === 'DELETE') {
+        const { error } = await (supabase.from('event_items') as any).insert(action.item);
+        if (error) throw error;
+      } else if (action.type === 'UPDATE') {
+        const { error } = await (supabase.from('event_items') as any).update(action.oldItem).eq('id', action.oldItem.id);
+        if (error) throw error;
+      } else if (action.type === 'ADD') {
+        const { error } = await (supabase.from('event_items') as any).delete().eq('id', action.item.id);
+        if (error) throw error;
+      }
+      setUndoStack(prev => prev.slice(0, -1));
+      setRedoStack(prev => [...prev, action]);
+      if (onDraftChanged) onDraftChanged();
+    } catch (err: any) {
+      console.error('Error in Undo:', err);
+      alert('Error al deshacer: ' + err.message);
+    }
+  }, [undoStack, onDraftChanged, supabase]);
+
+  const handleRedo = useCallback(async () => {
+    if (redoStack.length === 0) return;
+    const action = redoStack[redoStack.length - 1];
+    try {
+      if (action.type === 'DELETE') {
+        const { error } = await (supabase.from('event_items') as any).delete().eq('id', action.item.id);
+        if (error) throw error;
+      } else if (action.type === 'UPDATE') {
+        const { error } = await (supabase.from('event_items') as any).update(action.newItem).eq('id', action.newItem.id);
+        if (error) throw error;
+      } else if (action.type === 'ADD') {
+        const { error } = await (supabase.from('event_items') as any).insert(action.item);
+        if (error) throw error;
+      }
+      setRedoStack(prev => prev.slice(0, -1));
+      setUndoStack(prev => [...prev, action]);
+      if (onDraftChanged) onDraftChanged();
+    } catch (err: any) {
+      console.error('Error in Redo:', err);
+      alert('Error al rehacer: ' + err.message);
+    }
+  }, [redoStack, onDraftChanged, supabase]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
+  const handleFocus = (id: string) => {
+    if (id === 'manual') return;
+    const item = editableSuggestions.find(s => s.id === id);
+    if (item) setFocusedItemState({ ...item });
+  };
 
   const updateSupabase = async (updatedItem: EventItem) => {
     if (!updatedItem.id) return;
@@ -216,12 +300,16 @@ export function AiSuggestionsGrid({
     }
     const item = editableSuggestions.find(s => s.id === id);
     if (item) {
+      if (focusedItemState && JSON.stringify(focusedItemState) !== JSON.stringify(item)) {
+        pushUndoAction({ type: 'UPDATE', oldItem: focusedItemState, newItem: { ...item } });
+      }
       updateSupabase(item);
       if (item.parent_id) {
          const parent = editableSuggestions.find(s => s.id === item.parent_id);
          if (parent) updateSupabase(parent);
       }
     }
+    setFocusedItemState(null);
   };
 
   const handleAddManualToDraft = async () => {
@@ -253,7 +341,9 @@ export function AiSuggestionsGrid({
     setManualItem({ ...emptySuggestion, id: 'manual' });
     
     try {
-      await (supabase.from('event_items') as any).insert(newItem);
+      const { data, error } = await (supabase.from('event_items') as any).insert(newItem).select().single();
+      if (error) throw error;
+      pushUndoAction({ type: 'ADD', item: data as EventItem });
       if (onDraftChanged) onDraftChanged();
     } catch (e) {
       console.error(e);
@@ -442,9 +532,12 @@ export function AiSuggestionsGrid({
 
   const handleRemove = async (id: string) => {
     try {
+      const itemToDelete = editableSuggestions.find(s => s.id === id);
+      if (!itemToDelete) return;
       const childrenIds = editableSuggestions.filter(s => s.parent_id === id).map(s => s.id);
       const idsToRemove = [id, ...childrenIds];
       await (supabase.from('event_items') as any).delete().in('id', idsToRemove);
+      pushUndoAction({ type: 'DELETE', item: itemToDelete });
       setSelectedIds(prev => prev.filter(selId => !idsToRemove.includes(selId)));
       setEditableSuggestions(prev => prev.filter(item => !idsToRemove.includes(item.id!)));
       if (onDraftChanged) onDraftChanged();
@@ -1459,6 +1552,28 @@ export function AiSuggestionsGrid({
         
         <TableCell className="p-2">
           <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 mr-2 border-r pr-2 border-border/60">
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 text-muted-foreground shadow-xs"
+              disabled={undoStack.length === 0}
+              onClick={handleUndo}
+              title="Deshacer (Ctrl+Z)"
+            >
+              <Undo2 className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="outline"
+              className="h-8 w-8 text-muted-foreground shadow-xs"
+              disabled={redoStack.length === 0}
+              onClick={handleRedo}
+              title="Rehacer (Ctrl+Y)"
+            >
+              <Redo2 className="h-4 w-4" />
+            </Button>
+          </div>
             {!isChild && hasChildren && (
               <button onClick={() => toggleExpand(item.id!)} className="p-0.5 hover:bg-muted rounded text-muted-foreground flex-shrink-0">
                 {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -1472,7 +1587,8 @@ export function AiSuggestionsGrid({
                 <Input
                   value={item.servicio}
                   onChange={(e) => handleInputChange(item.id!, 'servicio', e.target.value)}
-                  onBlur={(e) => handleBlur(item.id!, e)}
+                  onFocus={() => handleFocus(item.id!)}
+                onBlur={(e) => handleBlur(item.id!, e)}
                   className={`h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all ${!isChild ? 'font-semibold' : 'font-medium text-muted-foreground'}`}
                   readOnly={hasChildren && !isExpanded} 
                 />
@@ -1502,7 +1618,8 @@ export function AiSuggestionsGrid({
           <Input
             value={item.detalle || ''}
             onChange={(e) => handleInputChange(item.id!, 'detalle', e.target.value)}
-            onBlur={(e) => handleBlur(item.id!, e)}
+            onFocus={() => handleFocus(item.id!)}
+                onBlur={(e) => handleBlur(item.id!, e)}
             className="h-8 text-sm w-full bg-transparent border-transparent hover:border-input focus:border-input focus:bg-background transition-all"
           />
         </TableCell>
@@ -1528,6 +1645,7 @@ export function AiSuggestionsGrid({
                 type="number"
                 value={item.cantidad}
                 onChange={(e) => handleInputChange(item.id!, 'cantidad', e.target.value)}
+                onFocus={() => handleFocus(item.id!)}
                 onBlur={(e) => handleBlur(item.id!, e)}
                 className="h-8 w-14 text-center px-1 text-sm font-bold bg-background shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 min="1"
@@ -1561,7 +1679,8 @@ export function AiSuggestionsGrid({
               type="number"
               value={Number(item.costo.toFixed(0))}
               onChange={(e) => handleInputChange(item.id!, 'costo', e.target.value)}
-              onBlur={(e) => handleBlur(item.id!, e)}
+              onFocus={() => handleFocus(item.id!)}
+                onBlur={(e) => handleBlur(item.id!, e)}
               className="h-8 text-sm w-full px-2"
               disabled={hasChildren} 
               title={hasChildren ? "Costo unitario resultante (Total insumos ÷ Unidades a la venta)" : "Costo unitario"}
@@ -1616,7 +1735,8 @@ export function AiSuggestionsGrid({
               type="number"
               value={Number((item.costo * (item.cantidad || 1)).toFixed(0))}
               onChange={(e) => handleInputChange(item.id!, 'costo_total', e.target.value)}
-              onBlur={(e) => handleBlur(item.id!, e)}
+              onFocus={() => handleFocus(item.id!)}
+                onBlur={(e) => handleBlur(item.id!, e)}
               className="h-8 text-sm w-full px-1 text-right font-bold text-red-700"
               title="Costo total (Modificar para recalcular el Costo Unitario)"
             />
@@ -1638,7 +1758,8 @@ export function AiSuggestionsGrid({
                   type="number"
                   value={item.ganancia}
                   onChange={(e) => handleInputChange(item.id!, 'ganancia', e.target.value)}
-                  onBlur={(e) => handleBlur(item.id!, e)}
+                  onFocus={() => handleFocus(item.id!)}
+                onBlur={(e) => handleBlur(item.id!, e)}
                   className="h-8 text-sm w-full px-2"
                    
                 />
@@ -1672,6 +1793,7 @@ export function AiSuggestionsGrid({
                 type="number"
                 value={item.valor_total || ''}
                 onChange={(e) => handleInputChange(item.id!, 'valor_total', e.target.value)}
+                onFocus={() => handleFocus(item.id!)}
                 onBlur={(e) => handleBlur(item.id!, e)}
                 className="h-8 text-sm w-full px-2 font-semibold border-emerald-200 focus:border-emerald-500"
               />
@@ -1865,6 +1987,7 @@ export function AiSuggestionsGrid({
                   type="number"
                   value={manualItem.cantidad || ''}
                   onChange={(e) => handleInputChange('manual', 'cantidad', e.target.value)}
+                  onFocus={() => handleFocus('manual')}
                   onBlur={(e) => handleBlur('manual', e)}
                   className="h-8 text-sm w-full text-center px-1 bg-background/90"
                   min="1"
@@ -1879,7 +2002,8 @@ export function AiSuggestionsGrid({
                     placeholder="0"
                     value={manualItem.costo || ''}
                     onChange={(e) => handleInputChange('manual', 'costo', e.target.value)}
-                    onBlur={(e) => handleBlur('manual', e)}
+                    onFocus={() => handleFocus('manual')}
+                  onBlur={(e) => handleBlur('manual', e)}
                     className="h-8 text-sm w-full px-2 bg-background/90"
                   />
                   <div className="flex items-center gap-1 w-full">
@@ -1924,6 +2048,7 @@ export function AiSuggestionsGrid({
                   type="number"
                   value={Number((manualItem.costo * (manualItem.cantidad || 1)).toFixed(0)) || ''}
                   onChange={(e) => handleInputChange('manual', 'costo_total', e.target.value)}
+                  onFocus={() => handleFocus('manual')}
                   onBlur={(e) => handleBlur('manual', e)}
                   className="h-8 text-sm w-full px-1 text-right font-bold text-red-700 bg-background/90"
                   placeholder="0"
@@ -1947,7 +2072,8 @@ export function AiSuggestionsGrid({
                         placeholder="0"
                         value={manualItem.ganancia || ''}
                         onChange={(e) => handleInputChange('manual', 'ganancia', e.target.value)}
-                        onBlur={(e) => handleBlur('manual', e)}
+                        onFocus={() => handleFocus('manual')}
+                  onBlur={(e) => handleBlur('manual', e)}
                         className="h-8 text-sm w-full px-2 bg-background/90"
                         disabled={manualItem.sin_ganancia}
                       />
@@ -1982,7 +2108,8 @@ export function AiSuggestionsGrid({
                       placeholder="0"
                       value={manualItem.valor_total || ''}
                       onChange={(e) => handleInputChange('manual', 'valor_total', e.target.value)}
-                      onBlur={(e) => handleBlur('manual', e)}
+                      onFocus={() => handleFocus('manual')}
+                  onBlur={(e) => handleBlur('manual', e)}
                       className="h-8 text-sm w-full px-2 font-semibold bg-background/90 border-emerald-200 focus:border-emerald-500"
                     />
                   </TableCell>
