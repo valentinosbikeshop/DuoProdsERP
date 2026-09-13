@@ -1171,15 +1171,20 @@ export function AiSuggestionsGrid({
             return aIdx - bIdx;
           });
 
-          // Persistir orden secuencialmente en created_at
+          // Persistir orden secuencialmente en created_at PARA TODOS los ítems (para evitar que los olvidados queden primero al refrescar)
           const nowBase = Date.now();
-          for (let i = 0; i < action.orderedIds.length; i++) {
-            const id = action.orderedIds[i];
+          for (let i = 0; i < newSuggestions.length; i++) {
+            const item = newSuggestions[i];
+            if (!item.id) continue;
             const newCreatedAt = new Date(nowBase + (i * 1000)).toISOString();
-            await (supabase.from('event_items') as any).update({ created_at: newCreatedAt }).eq('id', id);
-            const target = newSuggestions.find(s => s.id === id);
-            if (target) target.created_at = newCreatedAt;
-            affectedIds.push(id);
+            
+            // Actualizamos el objeto en memoria
+            item.created_at = newCreatedAt;
+            
+            // Solo actualizamos en BD si estaba en orderedIds, o si queremos garantizar el orden, mejor actualizamos todos los top-level o los que importan.
+            // En realidad, para garantizar orden absoluto en BD sin un sort_order real, tenemos que actualizar TODOS.
+            await (supabase.from('event_items') as any).update({ created_at: newCreatedAt }).eq('id', item.id);
+            affectedIds.push(item.id);
           }
         }
 

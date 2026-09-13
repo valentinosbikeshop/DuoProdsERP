@@ -114,8 +114,8 @@ CAPACIDADES Y ACCIONES DISPONIBLES QUE PUEDES EJECUTAR:
    - Para desarmar un grupo completo: proporciona 'parentId' (el ID del grupo padre que se desea eliminar para que todos sus hijos queden libres como ítems independientes).
    - Para liberar ítems específicos de un grupo: proporciona 'itemIds' con los IDs de los hijos a liberar.
 
-3. REORDER: Reordena la lista de ítems principales.
-   - Requiere: 'orderedIds' (arreglo con todos los IDs de los ítems principales en el orden exacto deseado, por ejemplo, ordenados por costo de mayor a menor, alfabéticamente, o colocando primero la comida y luego la bebida).
+3. REORDER: Reordena la lista de ítems.
+   - Requiere: 'orderedIds' (arreglo con TODOS los IDs de los ítems en el orden exacto deseado. ¡IMPORTANTE!: Si te piden ordenar, debes incluir absolutamente TODOS los IDs de la lista en el nuevo orden, no solo algunos).
 
 4. SWAP_NAME_DETAIL: Intercambia el Nombre ('servicio') y el Detalle ('detalle') de los ítems seleccionados.
    - Muy útil cuando al importar o dictar, el nombre quedó en el detalle y el detalle en el nombre.
