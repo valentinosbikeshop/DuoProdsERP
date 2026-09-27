@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogBody } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -130,8 +130,7 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
       if (!val) resetForm();
       onOpenChange(val);
     }}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
+      <DialogHeader>
           <DialogTitle>{transactionToEdit ? 'Editar Transacción' : (isGasto ? 'Registrar Gasto Real' : 'Agregar Abono')}</DialogTitle>
           <DialogDescription>
             {isGasto 
@@ -140,7 +139,7 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <DialogBody>
           <div className="space-y-2">
             <Label>Monto Total ($)</Label>
             <Input 
@@ -191,9 +190,9 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
               </Label>
             </div>
           )}
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="flex flex-col sm:flex-row gap-2 justify-between items-center sm:items-end border-t pt-4">
+        <DialogFooter className="flex flex-col sm:flex-row gap-2 justify-between items-center sm:items-end">
           {transactionToEdit ? (
             <div className="w-full sm:w-auto">
               {deleteStep === 0 && (
@@ -226,7 +225,6 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
             </Button>
           </div>
         </DialogFooter>
-      </DialogContent>
     </Dialog>
   );
 }
