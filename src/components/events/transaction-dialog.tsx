@@ -32,8 +32,16 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
   const [isFactura, setIsFactura] = useState<boolean>(
     transactionToEdit?.tipo_doc_costo === 'factura'
   );
+  const getInitialMetodoPago = () => {
+    if (!transactionToEdit) return 'transferencia';
+    if (transactionToEdit.tipo_doc_costo === 'factura' || transactionToEdit.tipo_doc_costo === 'boleta') {
+      return 'transferencia';
+    }
+    return transactionToEdit.tipo_doc_costo || 'transferencia';
+  };
+
   const [metodoPago, setMetodoPago] = useState<string>(
-    (!type || type === 'ABONO') ? (transactionToEdit?.tipo_doc_costo || 'transferencia') : ''
+    (!type || type === 'ABONO') ? getInitialMetodoPago() : ''
   );
   const [loading, setLoading] = useState(false);
   
