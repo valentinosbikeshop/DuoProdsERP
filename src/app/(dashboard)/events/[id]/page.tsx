@@ -13,6 +13,7 @@ import { AiSuggestionsGrid } from '@/components/events/ai-suggestions-grid';
 import { EventItemsTable } from '@/components/events/event-items-table';
 import { FloatingFinancialAdvisor } from '@/components/events/floating-financial-advisor';
 import { EditEventDialog } from '@/components/events/edit-event-dialog';
+import { TransactionDialog } from '@/components/events/transaction-dialog';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
 import { formatDateCL, calculateFinancials } from '@/lib/utils';
 import { 
@@ -52,6 +53,10 @@ export default function EventDetailPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [customAiLoading, setCustomAiLoading] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  
+  const [isTransactionOpen, setIsTransactionOpen] = useState(false);
+  const [transactionType, setTransactionType] = useState<'ABONO' | 'GASTO'>('ABONO');
+  const [transactionToEdit, setTransactionToEdit] = useState<EventItem | undefined>();
 
   const fetchEventData = useCallback(async () => {
     setLoading(true);
@@ -111,78 +116,10 @@ export default function EventDetailPage() {
 
 
   // Generate suggestions based on general event description and attached documents
-  const handleAddAbono = async () => {
-    const abonoStr = window.prompt("Ingresa el monto del Abono (Ingreso/Pago del Cliente):");
-    if (!abonoStr) return;
-    
-    const monto = parseInt(abonoStr.replace(/\D/g, ''));
-    if (isNaN(monto) || monto <= 0) return;
-
-    const newItem = {
-      event_id: id,
-      servicio: "Abono de Cliente",
-      detalle: "Ingreso real",
-      tipo_evento: "ABONO_CLIENTE",
-      cantidad: 1,
-      costo: 0,
-      ganancia: monto,
-      valor_neto: monto,
-      iva: 0,
-      valor_total: monto,
-      margen: 100,
-      approved: true,
-    };
-
-    try {
-      const { error } = await (supabase.from('event_items') as any).insert([newItem]);
-      if (error) throw error;
-      fetchEventData();
-    } catch (e) {
-      console.error(e);
-      alert('Error al registrar el abono.');
-    }
-  };
-
-  const handleUploadFactura = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    const montoStr = window.prompt("Ingresa el monto total del Documento (Gasto Real):");
-    if (!montoStr) {
-       e.target.value = '';
-       return;
-    }
-    const monto = parseInt(montoStr.replace(/\D/g, ''));
-    if (isNaN(monto) || monto <= 0) return;
-    
-    const isFactura = window.confirm('¿Es una Factura? (Aceptar para Factura, Cancelar para Boleta)');
-    
-    const newItem = {
-      event_id: id,
-      servicio: isFactura ? "Factura de Proveedor" : "Boleta de Proveedor",
-      detalle: file.name,
-      tipo_evento: "GASTO_REAL",
-      cantidad: 1,
-      costo: monto,
-      ganancia: 0,
-      valor_neto: isFactura ? Math.round(monto / 1.19) : monto,
-      iva: isFactura ? Math.round(monto - (monto / 1.19)) : 0,
-      valor_total: monto,
-      margen: 0,
-      tipo_doc_costo: isFactura ? 'factura' : 'boleta',
-      approved: true,
-    };
-
-    try {
-      const { error } = await (supabase.from('event_items') as any).insert([newItem]);
-      if (error) throw error;
-      fetchEventData();
-    } catch (err) {
-      console.error(err);
-      alert('Error al registrar el gasto real.');
-    } finally {
-      e.target.value = '';
-    }
+  const handleOpenTransaction = (type: 'ABONO' | 'GASTO', item?: EventItem) => {
+    setTransactionType(type);
+    setTransactionToEdit(item);
+    setIsTransactionOpen(true);
   };
 
   // Generate suggestions based on general event description and attached documents
@@ -716,22 +653,14 @@ export default function EventDetailPage() {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="h-8 gap-2 shadow-xs text-xs" onClick={handleAddAbono}>
+                  <Button size="sm" variant="outline" className="h-8 gap-2 shadow-xs text-xs" onClick={() => handleOpenTransaction('ABONO')}>
                     <CreditCard className="h-3.5 w-3.5" />
                     Abono
                   </Button>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                      onChange={handleUploadFactura}
-                    />
-                    <Button size="sm" variant="default" className="h-8 gap-2 shadow-xs text-xs relative pointer-events-none">
-                      <Upload className="h-3.5 w-3.5" />
-                      Documento (Gasto)
-                    </Button>
-                  </div>
+                  <Button size="sm" variant="default" className="h-8 gap-2 shadow-xs text-xs" onClick={() => handleOpenTransaction('GASTO')}>
+                    <Upload className="h-3.5 w-3.5" />
+                    Documento (Gasto)
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
@@ -750,7 +679,11 @@ export default function EventDetailPage() {
                 ) : (
                   <div className="space-y-3">
                     {transactions.map((t, idx) => (
-                      <div key={idx} className="flex justify-between items-center p-3 border border-border/50 rounded-lg bg-card/50 hover:bg-muted/30 transition-colors">
+                      <div 
+                        key={idx} 
+                        className="flex justify-between items-center p-3 border border-border/50 rounded-lg bg-card/50 hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => handleOpenTransaction(t.tipo_evento === 'ABONO_CLIENTE' ? 'ABONO' : 'GASTO', t)}
+                      >
                         <div>
                           <div className="flex items-center gap-2">
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.tipo_evento === 'ABONO_CLIENTE' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
@@ -821,6 +754,17 @@ export default function EventDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+      
+      {isTransactionOpen && (
+        <TransactionDialog
+          isOpen={isTransactionOpen}
+          onOpenChange={setIsTransactionOpen}
+          eventId={id}
+          type={transactionType}
+          transactionToEdit={transactionToEdit}
+          onSaved={fetchEventData}
+        />
+      )}
     </div>
   );
 }
