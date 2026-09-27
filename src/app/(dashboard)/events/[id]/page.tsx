@@ -44,6 +44,7 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<Event | null>(null);
   const [items, setItems] = useState<EventItem[]>([]);
   const [draftItems, setDraftItems] = useState<EventItem[]>([]);
+  const [transactions, setTransactions] = useState<EventItem[]>([]);
   const [parsedText, setParsedText] = useState<string>('');
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [customQuoteLocation, setCustomQuoteLocation] = useState<string>('');
@@ -73,8 +74,9 @@ export default function EventDetailPage() {
       if (itemsError) throw itemsError;
       
       const allItems = itemsData as EventItem[];
-      setItems(allItems.filter((item) => item.approved));
-      setDraftItems(allItems.filter((item) => !item.approved));
+      setItems(allItems.filter((item) => item.approved && item.tipo_evento !== 'ABONO_CLIENTE' && item.tipo_evento !== 'GASTO_REAL'));
+      setDraftItems(allItems.filter((item) => !item.approved && item.tipo_evento !== 'ABONO_CLIENTE' && item.tipo_evento !== 'GASTO_REAL'));
+      setTransactions(allItems.filter((item) => item.tipo_evento === 'ABONO_CLIENTE' || item.tipo_evento === 'GASTO_REAL'));
     } catch (error) {
       console.error('Error fetching event data:', error);
     } finally {
@@ -107,6 +109,81 @@ export default function EventDetailPage() {
     };
   }, [fetchEventData, id, supabase]);
 
+
+  // Generate suggestions based on general event description and attached documents
+  const handleAddAbono = async () => {
+    const abonoStr = window.prompt("Ingresa el monto del Abono (Ingreso/Pago del Cliente):");
+    if (!abonoStr) return;
+    
+    const monto = parseInt(abonoStr.replace(/\D/g, ''));
+    if (isNaN(monto) || monto <= 0) return;
+
+    const newItem = {
+      event_id: id,
+      servicio: "Abono de Cliente",
+      detalle: "Ingreso real",
+      tipo_evento: "ABONO_CLIENTE",
+      cantidad: 1,
+      costo: 0,
+      ganancia: monto,
+      valor_neto: monto,
+      iva: 0,
+      valor_total: monto,
+      margen: 100,
+      approved: true,
+    };
+
+    try {
+      const { error } = await supabase.from('event_items').insert(newItem);
+      if (error) throw error;
+      fetchEventData();
+    } catch (e) {
+      console.error(e);
+      alert('Error al registrar el abono.');
+    }
+  };
+
+  const handleUploadFactura = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const montoStr = window.prompt("Ingresa el monto total del Documento (Gasto Real):");
+    if (!montoStr) {
+       e.target.value = '';
+       return;
+    }
+    const monto = parseInt(montoStr.replace(/\D/g, ''));
+    if (isNaN(monto) || monto <= 0) return;
+    
+    const isFactura = window.confirm('¿Es una Factura? (Aceptar para Factura, Cancelar para Boleta)');
+    
+    const newItem = {
+      event_id: id,
+      servicio: isFactura ? "Factura de Proveedor" : "Boleta de Proveedor",
+      detalle: file.name,
+      tipo_evento: "GASTO_REAL",
+      cantidad: 1,
+      costo: monto,
+      ganancia: 0,
+      valor_neto: isFactura ? Math.round(monto / 1.19) : monto,
+      iva: isFactura ? Math.round(monto - (monto / 1.19)) : 0,
+      valor_total: monto,
+      margen: 0,
+      tipo_doc_costo: isFactura ? 'factura' : 'boleta',
+      approved: true,
+    };
+
+    try {
+      const { error } = await supabase.from('event_items').insert(newItem);
+      if (error) throw error;
+      fetchEventData();
+    } catch (err) {
+      console.error(err);
+      alert('Error al registrar el gasto real.');
+    } finally {
+      e.target.value = '';
+    }
+  };
 
   // Generate suggestions based on general event description and attached documents
   const handleGenerateSuggestions = async () => {
@@ -628,37 +705,71 @@ export default function EventDetailPage() {
         <TabsContent value="finances" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Card className="shadow-xs glass-card border-border/70 md:col-span-2">
-              <CardHeader className="pb-4 border-b border-border/40">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-primary" />
-                  Control de Abonos y Pagos
-                </CardTitle>
-                <CardDescription className="text-xs mt-1.5">
-                  Registra los pagos adelantados (abonos) que realiza el cliente y las facturas reales emitidas. Estos valores NO alteran el presupuesto oficial, solo controlan el flujo de caja.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="flex flex-col items-center justify-center py-10 text-center space-y-4 border-2 border-dashed border-border/60 rounded-xl bg-muted/20">
-                  <div className="p-3 bg-primary/10 text-primary rounded-full">
-                    <DollarSign className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-foreground text-sm">Aún no hay transacciones registradas</h4>
-                    <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-                      Agrega el primer abono del cliente o sube la primera factura de proveedor para llevar el control real de gastos e ingresos.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <Button size="sm" variant="outline" className="h-9 gap-2 shadow-xs" onClick={() => alert('Próximamente: Panel completo de ingresos/egresos reales')}>
-                      <CreditCard className="h-4 w-4" />
-                      Agregar Abono
-                    </Button>
-                    <Button size="sm" variant="default" className="h-9 gap-2 shadow-xs" onClick={() => alert('Próximamente: Subida de boletas/facturas')}>
-                      <Upload className="h-4 w-4" />
-                      Subir Factura Real
+              <CardHeader className="pb-4 border-b border-border/40 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    Control de Abonos y Pagos
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-1.5">
+                    Registra los pagos adelantados (abonos) que realiza el cliente y los gastos reales (facturas/boletas).
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="h-8 gap-2 shadow-xs text-xs" onClick={handleAddAbono}>
+                    <CreditCard className="h-3.5 w-3.5" />
+                    Abono
+                  </Button>
+                  <div className="relative">
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                      onChange={handleUploadFactura}
+                    />
+                    <Button size="sm" variant="default" className="h-8 gap-2 shadow-xs text-xs relative pointer-events-none">
+                      <Upload className="h-3.5 w-3.5" />
+                      Documento (Gasto)
                     </Button>
                   </div>
                 </div>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {transactions.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-10 text-center space-y-4 border-2 border-dashed border-border/60 rounded-xl bg-muted/20">
+                    <div className="p-3 bg-primary/10 text-primary rounded-full">
+                      <DollarSign className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-foreground text-sm">Aún no hay transacciones registradas</h4>
+                      <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                        Agrega el primer abono del cliente o sube el primer documento de gasto.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {transactions.map((t, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-3 border border-border/50 rounded-lg bg-card/50 hover:bg-muted/30 transition-colors">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.tipo_evento === 'ABONO_CLIENTE' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                              {t.tipo_evento === 'ABONO_CLIENTE' ? 'ABONO' : 'GASTO'}
+                            </span>
+                            <span className="font-medium text-sm text-foreground">{t.servicio}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{t.detalle || '-'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-semibold ${t.tipo_evento === 'ABONO_CLIENTE' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {t.tipo_evento === 'ABONO_CLIENTE' ? '+' : '-'}${t.valor_total.toLocaleString('es-CL')}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground uppercase">{t.tipo_doc_costo || 'N/A'}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -681,14 +792,27 @@ export default function EventDetailPage() {
                 <div className="flex justify-between items-end border-b border-border/40 pb-3">
                   <div>
                     <p className="text-xs font-medium text-emerald-600/80 uppercase tracking-wider">Abonos Recibidos</p>
-                    <p className="text-sm font-semibold text-emerald-600 mt-1">$0</p>
+                    <p className="text-sm font-semibold text-emerald-600 mt-1">
+                      ${transactions.filter(t => t.tipo_evento === 'ABONO_CLIENTE').reduce((acc, t) => acc + (t.valor_total || 0), 0).toLocaleString('es-CL')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-end border-b border-border/40 pb-3">
+                  <div>
+                    <p className="text-xs font-medium text-rose-600/80 uppercase tracking-wider">Gastos Reales</p>
+                    <p className="text-sm font-semibold text-rose-600 mt-1">
+                      ${transactions.filter(t => t.tipo_evento === 'GASTO_REAL').reduce((acc, t) => acc + (t.valor_total || 0), 0).toLocaleString('es-CL')}
+                    </p>
                   </div>
                 </div>
                 <div className="flex justify-between items-end pt-1">
                   <div>
                     <p className="text-xs font-bold text-foreground uppercase tracking-wider">Saldo por Cobrar</p>
                     <p className="text-xl font-bold text-foreground mt-1">
-                      ${items.reduce((acc, item) => acc + (item.valor_total || 0), 0).toLocaleString('es-CL')}
+                      ${(
+                        items.reduce((acc, item) => acc + (item.valor_total || 0), 0) -
+                        transactions.filter(t => t.tipo_evento === 'ABONO_CLIENTE').reduce((acc, t) => acc + (t.valor_total || 0), 0)
+                      ).toLocaleString('es-CL')}
                     </p>
                   </div>
                 </div>
