@@ -263,6 +263,8 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
 
     // Familia de modelos activos en Gemini API
     const modelsToTry = [
+      'gemini-3.8-flash',
+      'gemini-3.7-flash',
       'gemini-3.6-flash'
     ];
 

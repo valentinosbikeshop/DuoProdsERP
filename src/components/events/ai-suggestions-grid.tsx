@@ -16,7 +16,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork, GripVertical, Undo2, Redo2 } from 'lucide-react';
+import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork, GripVertical, Undo2, Redo2, Banknote } from 'lucide-react';
 import { useDragAutoScroll } from '@/hooks/use-drag-auto-scroll';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
@@ -348,6 +348,84 @@ export function AiSuggestionsGrid({
     } catch (e) {
       console.error(e);
       alert('Error al agregar el ítem manual.');
+    }
+  };
+
+  const handleAddAbono = async () => {
+    const abonoStr = window.prompt("Ingresa el monto del Abono (Ingreso/Pago del Cliente):");
+    if (!abonoStr) return;
+    
+    const monto = parseInt(abonoStr.replace(/\D/g, ''));
+    if (isNaN(monto) || monto <= 0) return;
+
+    // Use calculateGananciaFromTotal with 0 cost to back-calculate the net and VAT
+    const financials = calculateGananciaFromTotal(0, monto, 'factura', true, false);
+
+    const newItem = {
+      event_id: eventId,
+      servicio: "Abono Cliente",
+      detalle: "Pago adelantado",
+      tipo_evento: "Abono",
+      cantidad: 1,
+      costo: 0,
+      ganancia: financials.ganancia,
+      valor_neto: financials.valorNeto,
+      iva: financials.ivaDebito,
+      valor_total: financials.valorTotal,
+      margen: 100,
+      tipo_doc_costo: 'factura' as const,
+      iva_incluido: true,
+      es_insumo: false,
+      approved: false,
+    };
+
+    try {
+      const { data, error } = await (supabase.from('event_items') as any).insert(newItem).select().single();
+      if (error) throw error;
+      pushUndoAction({ type: 'ADD', item: data as EventItem });
+      if (onDraftChanged) onDraftChanged();
+    } catch (e) {
+      console.error(e);
+      alert('Error al agregar el abono.');
+    }
+  };
+
+  const handleAddAbono = async () => {
+    const abonoStr = window.prompt("Ingresa el monto del Abono (Ingreso/Pago del Cliente):");
+    if (!abonoStr) return;
+    
+    const monto = parseInt(abonoStr.replace(/\D/g, ''));
+    if (isNaN(monto) || monto <= 0) return;
+
+    // Use calculateGananciaFromTotal with 0 cost to back-calculate the net and VAT
+    const financials = calculateGananciaFromTotal(0, monto, 'factura', true, false);
+
+    const newItem = {
+      event_id: eventId,
+      servicio: "Abono Cliente",
+      detalle: "Pago adelantado",
+      tipo_evento: "Abono",
+      cantidad: 1,
+      costo: 0,
+      ganancia: financials.ganancia,
+      valor_neto: financials.valorNeto,
+      iva: financials.ivaDebito,
+      valor_total: financials.valorTotal,
+      margen: 100,
+      tipo_doc_costo: 'factura' as const,
+      iva_incluido: true,
+      es_insumo: false,
+      approved: false,
+    };
+
+    try {
+      const { data, error } = await (supabase.from('event_items') as any).insert(newItem).select().single();
+      if (error) throw error;
+      pushUndoAction({ type: 'ADD', item: data as EventItem });
+      if (onDraftChanged) onDraftChanged();
+    } catch (e) {
+      console.error(e);
+      alert('Error al agregar el abono.');
     }
   };
 
@@ -1886,6 +1964,15 @@ export function AiSuggestionsGrid({
 
           {editableSuggestions.length > 0 && (
             <>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAddAbono}
+                className="h-8 text-xs text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200 gap-1 font-semibold shadow-xs"
+              >
+                <Banknote className="h-3.5 w-3.5" />
+                Agregar Abono
+              </Button>
               <Button
                 size="sm"
                 variant="outline"

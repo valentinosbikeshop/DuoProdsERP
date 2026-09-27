@@ -28,7 +28,8 @@ import {
   Wand2,
   FileSpreadsheet,
   ClipboardList,
-  Store
+  Store,
+  Upload
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -339,16 +340,21 @@ export default function EventDetailPage() {
         )}
       </div>
 
-      <Tabs defaultValue="info" className="space-y-4 mt-6">
-        <TabsList className="flex flex-wrap md:inline-flex w-full md:w-auto h-auto min-h-12 gap-1.5 justify-start md:justify-center p-1.5">
-          <TabsTrigger value="info">Información</TabsTrigger>
-          <TabsTrigger value="draft" className="flex items-center gap-1.5">
+      <Tabs defaultValue="info" className="space-y-6 mt-6">
+        <TabsList className="inline-flex h-11 items-center justify-center rounded-lg bg-muted/60 p-1 text-muted-foreground w-full md:w-auto overflow-x-auto shadow-sm">
+          <TabsTrigger value="info" className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+            <Building2 className="h-4 w-4" />
+            Información
+          </TabsTrigger>
+          <TabsTrigger value="draft" className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+            <Sparkles className="h-4 w-4" />
             Borrador de Costos
           </TabsTrigger>
-          <TabsTrigger value="items" className="flex items-center gap-1.5">
-            Ítems Aprobados
+          <TabsTrigger value="items" className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+            <CheckCircle className="h-4 w-4" />
+            Presupuesto Oficial
             {items.length > 0 && (
-              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] h-4 ml-1">
+              <Badge variant="secondary" className="px-1.5 py-0.5 text-[10px] ml-1 bg-primary/10 text-primary border-0">
                 {items.length}
               </Badge>
             )}
@@ -358,11 +364,14 @@ export default function EventDetailPage() {
         {/* Tab 1: Información */}
         <TabsContent value="info" className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Detalles del Evento</CardTitle>
+            <Card className="shadow-xs glass-card border-border/70">
+              <CardHeader className="pb-4 border-b border-border/40">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary" />
+                  Detalles del Evento
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-4">
                 <div className="flex items-center gap-3 text-sm">
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium w-24">Cliente:</span>
@@ -378,21 +387,27 @@ export default function EventDetailPage() {
                   <span className="font-medium w-24">Ubicación:</span>
                   <span>{event.location || 'No especificada'}</span>
                 </div>
-                <div className="mt-4 pt-4 border-t border-border/40">
-                  <h4 className="font-medium text-sm mb-2">Descripción:</h4>
+                <div className="mt-4 pt-4 border-t border-border/40 bg-muted/30 -mx-6 -mb-6 px-6 py-4 rounded-b-xl">
+                  <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-primary/70" />
+                    Descripción:
+                  </h4>
                   <p className="text-sm text-muted-foreground whitespace-pre-wrap">{event.description || 'Sin descripción.'}</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Documentos Adjuntos</CardTitle>
-                <CardDescription>
+            <Card className="shadow-xs glass-card border-border/70">
+              <CardHeader className="pb-4 border-b border-border/40">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileSpreadsheet className="h-4 w-4 text-primary" />
+                  Documentos Adjuntos
+                </CardTitle>
+                <CardDescription className="text-xs">
                   Sube cotizaciones, riders técnicos u otros documentos para mejorar las sugerencias de la IA.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-4">
                 {!isCompleted ? (
                   <div className="space-y-4">
                     <FileUpload 
@@ -418,42 +433,26 @@ export default function EventDetailPage() {
         {/* Tab 2: Borrador de Costos (antes Sugerencias IA) */}
         <TabsContent value="draft" className="space-y-6">
           {/* Card de Generación con IA */}
-          <Card className="glass-card border-primary/25 shadow-sm">
-            <CardHeader className="pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-2xs">
-                  <Wand2 className="h-4 w-4" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg font-bold">Generadores Inteligentes de Costos</CardTitle>
-                  <CardDescription className="text-xs">
-                    Calcula y desglosa automáticamente insumos, gastronomía, personal y servicios mediante Inteligencia Artificial.
-                  </CardDescription>
-                </div>
+          <Card className="border border-primary/20 bg-gradient-to-br from-primary/5 via-card to-card shadow-sm overflow-hidden mb-2">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-foreground text-sm">Asistente IA de Costos</h3>
+                <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">Calcula insumos, personal y extrae facturas automáticamente.</span>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-                {/* Generador 1: Desglose de Requerimiento Específico (Prompt Libre) */}
-                <div className="lg:col-span-2 p-4 sm:p-5 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md flex flex-col justify-between space-y-3 shadow-xs hover:border-primary/40 transition-all">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                      <Sparkles className="h-3.5 w-3.5 text-primary" />
-                      <span>{event.has_retail_sales ? 'Desglose Específico con IA (Recetas / Barra / Insumos)' : 'Desglose Específico con IA (Equipamiento / Servicios)'}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {event.has_retail_sales 
-                        ? 'Escribe un pedido o menú para que la IA calcule automáticamente los ingredientes, insumos, cantidades y costos:' 
-                        : 'Escribe requerimientos técnicos específicos para que la IA sugiera el desglose de equipos, servicios y personal:'}
-                    </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                {/* Custom Prompt Input */}
+                <div className="md:col-span-8 flex flex-col relative">
+                  <div className="relative h-full flex flex-col">
                     <textarea
                       rows={2}
                       value={customPrompt}
                       onChange={(e) => setCustomPrompt(e.target.value)}
                       placeholder={event.has_retail_sales 
-                        ? "Ej: 50 empanadas de pino sin aceituna, 30 empanadas napolitanas, 20 litros de chicha y 2 parrilleros por 5 horas..."
-                        : "Ej: Iluminación perimetral con 12 focos LED, sistema de sonido para 300 personas, 2 pantallas de apoyo y 1 operador técnico por 8 horas..."}
-                      className="w-full rounded-xl border border-input/80 bg-background/80 px-3.5 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 custom-scrollbar resize-none font-normal shadow-2xs"
+                        ? "Escribe un menú, receta o requerimiento (Ej: 50 empanadas, 20L chicha)..." 
+                        : "Escribe requerimientos (Ej: Iluminación para 300 personas, 2 pantallas)..."}
+                      className="w-full h-full min-h-[76px] rounded-xl border border-input/80 bg-background/90 px-3 py-2 pb-9 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/40 custom-scrollbar resize-none font-normal shadow-xs"
                       disabled={customAiLoading || isCompleted}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey && customPrompt.trim()) {
@@ -462,58 +461,120 @@ export default function EventDetailPage() {
                         }
                       }}
                     />
-                    <input
-                      type="text"
-                      value={customQuoteLocation}
-                      onChange={(e) => setCustomQuoteLocation(e.target.value)}
-                      placeholder="Lugar de cotización (Opcional, Ej: Supermercado Líder, La Vega...)"
-                      className="w-full mt-2 rounded-xl border border-input/80 bg-background/80 px-3.5 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20 font-normal shadow-2xs"
-                      disabled={customAiLoading || isCompleted}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && customPrompt.trim()) {
-                          e.preventDefault();
-                          handleGenerateCustomBreakdown();
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40">
-                    <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                      Tip: Presiona Enter para enviar
-                    </span>
-                    <Button 
-                      onClick={handleGenerateCustomBreakdown} 
-                      disabled={customAiLoading || !customPrompt.trim() || isCompleted}
-                      size="sm"
-                      className="gap-1.5 ml-auto shadow-xs font-medium rounded-xl"
-                    >
-                      {customAiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-                      {customAiLoading ? 'Desglosando con IA...' : 'Desglosar y Añadir al Borrador'}
-                    </Button>
+                    <div className="absolute bottom-1.5 right-1.5 left-1.5 flex justify-between items-center">
+                      {event.has_retail_sales ? (
+                        <input
+                          type="text"
+                          value={customQuoteLocation}
+                          onChange={(e) => setCustomQuoteLocation(e.target.value)}
+                          placeholder="Lugar cotización (Opcional)"
+                          className="w-40 rounded-md border-0 bg-transparent px-1.5 py-1 text-[11px] text-muted-foreground focus-visible:outline-none focus-visible:ring-0"
+                          disabled={customAiLoading || isCompleted}
+                        />
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/60 pl-2 hidden sm:inline">Presiona Enter para enviar</span>
+                      )}
+                      <Button 
+                        onClick={handleGenerateCustomBreakdown} 
+                        disabled={customAiLoading || !customPrompt.trim() || isCompleted}
+                        size="sm"
+                        className="h-6 rounded-md text-[11px] px-2"
+                      >
+                        {customAiLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                        Generar
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Generador 2: Sugerencias Generales del Evento y Documentos */}
-                <div className="p-4 sm:p-5 rounded-2xl border border-border/70 bg-card/70 backdrop-blur-md flex flex-col justify-between space-y-3 shadow-xs hover:border-primary/40 transition-all">
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                      <FileSpreadsheet className="h-3.5 w-3.5 text-primary" />
-                      <span>Sugerir según Ficha y Adjuntos</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Analiza la descripción del evento y los documentos técnicos/cotizaciones subidos para sugerir el montaje global.
-                    </p>
-                  </div>
-                  <div className="pt-2 border-t border-border/40">
+                {/* General Actions */}
+                <div className="md:col-span-4 flex flex-col gap-2 justify-center">
+                  <Button 
+                    variant="outline"
+                    onClick={handleGenerateSuggestions} 
+                    disabled={aiLoading || isCompleted}
+                    size="sm"
+                    className="w-full justify-start gap-2 text-xs border-primary/20 hover:bg-primary/5 h-[36px] rounded-xl font-medium"
+                  >
+                    {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" /> : <Wand2 className="h-3.5 w-3.5 text-primary" />}
+                    Sugerir desde Ficha
+                  </Button>
+                  
+                  <div className="relative w-full">
+                    <input
+                      type="file"
+                      accept=".pdf,.jpg,.jpeg,.png,.xlsx,.csv"
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+                      disabled={aiLoading || isCompleted}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        
+                        setAiLoading(true);
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        
+                        try {
+                          const res = await fetch('/api/parse-file', { method: 'POST', body: formData });
+                          if (!res.ok) throw new Error('Error al procesar el archivo');
+                          const { text } = await res.json();
+                          
+                          const aiRes = await fetch('/api/ai/suggest-costs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              customPrompt: "Extrae de este documento (factura/boleta/cotización) todos los artículos de compra y cantidades para el borrador de costos.",
+                              eventDescription: text,
+                              eventType: event?.status || '',
+                            }),
+                          });
+                          
+                          if (!aiRes.ok) throw new Error('Error al generar desglose');
+                          const data = await aiRes.json();
+                          
+                          if (data.suggestions && data.suggestions.length > 0) {
+                            const newDrafts = data.suggestions.map((s: any) => {
+                              const tipoDoc = s.tipo_doc_costo || 'factura';
+                              const rawCosto = s.costo || 0;
+                              const ganancia = s.ganancia || 0;
+                              const financials = calculateFinancials(rawCosto, ganancia, tipoDoc);
+                              return {
+                                event_id: id,
+                                servicio: s.servicio,
+                                detalle: s.detalle,
+                                tipo_evento: s.tipo_evento || 'AI',
+                                cantidad: s.cantidad || 1,
+                                costo: rawCosto,
+                                ganancia: ganancia,
+                                valor_neto: financials.valorNeto,
+                                iva: financials.iva,
+                                valor_total: financials.valorTotal,
+                                margen: financials.margen,
+                                tipo_doc_costo: tipoDoc,
+                                approved: false,
+                              };
+                            });
+                            await supabase.from('event_items').insert(newDrafts);
+                            fetchEventData(); // Refresh UI
+                          } else {
+                            alert('No se detectaron ítems en el documento.');
+                          }
+                        } catch (err: any) {
+                          alert(err.message);
+                        } finally {
+                          setAiLoading(false);
+                          if (e.target) e.target.value = '';
+                        }
+                      }}
+                    />
                     <Button 
                       variant="outline"
-                      onClick={handleGenerateSuggestions} 
                       disabled={aiLoading || isCompleted}
                       size="sm"
-                      className="w-full gap-1.5 text-xs border-primary/30 hover:bg-primary/10 font-medium rounded-xl"
+                      className="w-full justify-start gap-2 text-xs bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100/50 border-emerald-200 h-[36px] rounded-xl relative pointer-events-none font-medium"
                     >
-                      {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5 text-primary" />}
-                      {aiLoading ? 'Generando...' : 'Generar Sugerencias Generales'}
+                      {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" /> : <Upload className="h-3.5 w-3.5 text-emerald-600" />}
+                      Subir Factura y Extraer
                     </Button>
                   </div>
                 </div>
