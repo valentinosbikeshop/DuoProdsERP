@@ -134,7 +134,7 @@ export default function EventDetailPage() {
     };
 
     try {
-      const { error } = await supabase.from('event_items').insert(newItem);
+      const { error } = await (supabase.from('event_items') as any).insert([newItem]);
       if (error) throw error;
       fetchEventData();
     } catch (e) {
@@ -174,7 +174,7 @@ export default function EventDetailPage() {
     };
 
     try {
-      const { error } = await supabase.from('event_items').insert(newItem);
+      const { error } = await (supabase.from('event_items') as any).insert([newItem]);
       if (error) throw error;
       fetchEventData();
     } catch (err) {
