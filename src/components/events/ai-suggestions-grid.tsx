@@ -390,44 +390,6 @@ export function AiSuggestionsGrid({
     }
   };
 
-  const handleAddAbono = async () => {
-    const abonoStr = window.prompt("Ingresa el monto del Abono (Ingreso/Pago del Cliente):");
-    if (!abonoStr) return;
-    
-    const monto = parseInt(abonoStr.replace(/\D/g, ''));
-    if (isNaN(monto) || monto <= 0) return;
-
-    // Use calculateGananciaFromTotal with 0 cost to back-calculate the net and VAT
-    const financials = calculateGananciaFromTotal(0, monto, 'factura', true, false);
-
-    const newItem = {
-      event_id: eventId,
-      servicio: "Abono Cliente",
-      detalle: "Pago adelantado",
-      tipo_evento: "Abono",
-      cantidad: 1,
-      costo: 0,
-      ganancia: financials.ganancia,
-      valor_neto: financials.valorNeto,
-      iva: financials.ivaDebito,
-      valor_total: financials.valorTotal,
-      margen: 100,
-      tipo_doc_costo: 'factura' as const,
-      iva_incluido: true,
-      es_insumo: false,
-      approved: false,
-    };
-
-    try {
-      const { data, error } = await (supabase.from('event_items') as any).insert(newItem).select().single();
-      if (error) throw error;
-      pushUndoAction({ type: 'ADD', item: data as EventItem });
-      if (onDraftChanged) onDraftChanged();
-    } catch (e) {
-      console.error(e);
-      alert('Error al agregar el abono.');
-    }
-  };
 
   const handleApprove = async (item: EventItem) => {
     if (!item.servicio) return;
