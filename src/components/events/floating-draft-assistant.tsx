@@ -21,11 +21,11 @@ interface FloatingDraftAssistantProps {
 const WELCOME_MESSAGE = `¡Hola! Soy tu Asistente de Borradores IA. Conozco todos los ítems, costos, detalles y jerarquías de esta lista.
 
 Puedo ayudarte con:
-• **Consolidar / Agrupar**: "agrupa las empanadas bajo el nombre Empanadas"
-• **Desagrupar**: "desarma el grupo de bebidas" o "saca el hielo del grupo"
-• **Reordenar**: "ordena por costo de mayor a menor" o "pon la comida primero"
-• **Invertir**: "cambia entre detalle y nombre en todos los ítems"
-• **Modificar**: "cambia el nombre de X a Y" o "ajusta el costo a $5.000"
+• **Consolidar / Agrupar**: "agrupa los ítems similares bajo la categoría de Servicios"
+• **Desagrupar**: "desarma el grupo de Equipamiento" o "saca un ítem específico del grupo"
+• **Reordenar**: "ordena por costo de mayor a menor" o "pon los servicios técnicos primero"
+• **Invertir**: "cambia entre detalle y servicio en todos los ítems"
+• **Modificar**: "cambia el nombre de X a Y" o "ajusta el costo del ítem 3 a $5.000"
 • **Facturas e Imágenes**: Adjunta un PDF, foto o imagen de cotización/factura para extraer y organizar los ítems automáticamente.`;
 
 export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingDraftAssistantProps) {
@@ -276,7 +276,7 @@ export function FloatingDraftAssistant({ draftItems, onApplyActions }: FloatingD
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ej. Agrupa las empanadas, invierte nombre y detalle, reordena..."
+                placeholder="Ej. Agrupa los ítems técnicos, reordena por costo, invierte detalles..."
                 className="w-full max-h-32 min-h-[40px] bg-transparent border-0 focus:ring-0 resize-none py-2 px-1 text-sm custom-scrollbar"
                 rows={1}
               />
