@@ -23,6 +23,8 @@ import {
   Calendar, 
   MapPin, 
   Building2, 
+  DollarSign,
+  CreditCard, 
   Lock, 
   ArrowLeft,
   Wand2,
@@ -359,6 +361,10 @@ export default function EventDetailPage() {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="finances" className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+            <DollarSign className="h-4 w-4" />
+            Finanzas
+          </TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Información */}
@@ -438,7 +444,7 @@ export default function EventDetailPage() {
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-foreground text-sm">Asistente IA de Costos</h3>
-                <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">Calcula insumos, personal y extrae facturas automáticamente.</span>
+                <span className="text-xs text-muted-foreground ml-2 hidden sm:inline-block">Calcula insumos, personal y extrae cotizaciones automáticamente.</span>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
@@ -574,7 +580,7 @@ export default function EventDetailPage() {
                       className="w-full justify-start gap-2 text-xs bg-emerald-50/50 text-emerald-700 hover:bg-emerald-100/50 border-emerald-200 h-[36px] rounded-xl relative pointer-events-none font-medium"
                     >
                       {aiLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600" /> : <Upload className="h-3.5 w-3.5 text-emerald-600" />}
-                      Subir Factura y Extraer
+                      Subir Cotización (PDF/IMG)
                     </Button>
                   </div>
                 </div>
@@ -616,6 +622,79 @@ export default function EventDetailPage() {
             </CardContent>
           </Card>
           <FloatingFinancialAdvisor event={event} items={items} />
+        </TabsContent>
+
+        {/* Tab 4: Finanzas */}
+        <TabsContent value="finances" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card className="shadow-xs glass-card border-border/70 md:col-span-2">
+              <CardHeader className="pb-4 border-b border-border/40">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-primary" />
+                  Control de Abonos y Pagos
+                </CardTitle>
+                <CardDescription className="text-xs mt-1.5">
+                  Registra los pagos adelantados (abonos) que realiza el cliente y las facturas reales emitidas. Estos valores NO alteran el presupuesto oficial, solo controlan el flujo de caja.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center justify-center py-10 text-center space-y-4 border-2 border-dashed border-border/60 rounded-xl bg-muted/20">
+                  <div className="p-3 bg-primary/10 text-primary rounded-full">
+                    <DollarSign className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-foreground text-sm">Aún no hay transacciones registradas</h4>
+                    <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                      Agrega el primer abono del cliente o sube la primera factura de proveedor para llevar el control real de gastos e ingresos.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <Button size="sm" variant="outline" className="h-9 gap-2 shadow-xs" onClick={() => alert('Próximamente: Panel completo de ingresos/egresos reales')}>
+                      <CreditCard className="h-4 w-4" />
+                      Agregar Abono
+                    </Button>
+                    <Button size="sm" variant="default" className="h-9 gap-2 shadow-xs" onClick={() => alert('Próximamente: Subida de boletas/facturas')}>
+                      <Upload className="h-4 w-4" />
+                      Subir Factura Real
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-xs glass-card border-border/70">
+              <CardHeader className="pb-4 border-b border-border/40 bg-muted/10">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-emerald-600" />
+                  Resumen Real
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-4">
+                <div className="flex justify-between items-end border-b border-border/40 pb-3">
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Presupuestado</p>
+                    <p className="text-sm font-semibold text-foreground mt-1">
+                      ${items.reduce((acc, item) => acc + (item.valor_total || 0), 0).toLocaleString('es-CL')}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-end border-b border-border/40 pb-3">
+                  <div>
+                    <p className="text-xs font-medium text-emerald-600/80 uppercase tracking-wider">Abonos Recibidos</p>
+                    <p className="text-sm font-semibold text-emerald-600 mt-1">$0</p>
+                  </div>
+                </div>
+                <div className="flex justify-between items-end pt-1">
+                  <div>
+                    <p className="text-xs font-bold text-foreground uppercase tracking-wider">Saldo por Cobrar</p>
+                    <p className="text-xl font-bold text-foreground mt-1">
+                      ${items.reduce((acc, item) => acc + (item.valor_total || 0), 0).toLocaleString('es-CL')}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
