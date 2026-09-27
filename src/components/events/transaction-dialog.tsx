@@ -79,7 +79,7 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
 
     try {
       if (transactionToEdit) {
-        const { error } = await supabase.from('event_items').update(transactionData).eq('id', transactionToEdit.id);
+        const { error } = await (supabase.from('event_items') as any).update(transactionData).eq('id', transactionToEdit.id);
         if (error) throw error;
       } else {
         const { error } = await (supabase.from('event_items') as any).insert([transactionData]);
@@ -112,7 +112,7 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
     setIsDeleting(true);
     const supabase = createClient();
     try {
-      const { error } = await supabase.from('event_items').delete().eq('id', transactionToEdit.id);
+      const { error } = await (supabase.from('event_items') as any).delete().eq('id', transactionToEdit.id);
       if (error) throw error;
       onSaved();
       onOpenChange(false);
