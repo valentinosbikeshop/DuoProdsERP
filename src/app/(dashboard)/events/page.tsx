@@ -24,7 +24,7 @@ export default function EventsPage() {
         .from('events')
         .select('*')
         .is('deleted_at', null)
-        .order('event_date', { ascending: true });
+        .order('created_at', { ascending: false });
       
       if (!error && data) {
         setEvents(data as Event[]);
