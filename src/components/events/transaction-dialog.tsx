@@ -5,7 +5,8 @@ import { Dialog, DialogHeader, DialogTitle, DialogFooter, DialogDescription, Dia
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Trash2, AlertTriangle, Calendar as CalendarIcon, FileText } from 'lucide-react';
+import { Select } from '@/components/ui/select';
+import { Loader2, Trash2, AlertTriangle, Calendar as CalendarIcon, FileText, CreditCard } from 'lucide-react';
 import { EventItem } from '@/types';
 import { createClient } from '@/lib/supabase/client';
 
@@ -31,6 +32,9 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
   const [isFactura, setIsFactura] = useState<boolean>(
     transactionToEdit?.tipo_doc_costo === 'factura'
   );
+  const [metodoPago, setMetodoPago] = useState<string>(
+    (!type || type === 'ABONO') ? (transactionToEdit?.tipo_doc_costo || 'transferencia') : ''
+  );
   const [loading, setLoading] = useState(false);
   
   // States for delete confirmation
@@ -44,6 +48,7 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
     setDescripcion('');
     setFecha(new Date().toISOString().split('T')[0]);
     setIsFactura(false);
+    setMetodoPago('transferencia');
     setDeleteStep(0);
     setIsDeleting(false);
   };
@@ -73,7 +78,7 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
       iva: isFacturaDoc ? Math.round(parsedMonto - (parsedMonto / 1.19)) : 0,
       valor_total: parsedMonto,
       margen: isGasto ? 0 : 100,
-      tipo_doc_costo: isGasto ? (isFacturaDoc ? 'factura' : 'boleta') : undefined,
+      tipo_doc_costo: isGasto ? (isFacturaDoc ? 'factura' : 'boleta') : metodoPago,
       approved: true,
     };
 
@@ -175,6 +180,27 @@ export function TransactionDialog({ isOpen, onOpenChange, eventId, type, transac
               />
             </div>
           </div>
+
+          {!isGasto && (
+            <div className="space-y-2">
+              <Label>Método de Pago</Label>
+              <div className="relative flex items-center">
+                <CreditCard className="absolute left-3 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Select 
+                  className="pl-9"
+                  value={metodoPago} 
+                  onChange={(e) => setMetodoPago(e.target.value)} 
+                  options={[
+                    { value: 'transferencia', label: 'Transferencia Bancaria' },
+                    { value: 'efectivo', label: 'Efectivo' },
+                    { value: 'tarjeta', label: 'Tarjeta (Débito/Crédito)' },
+                    { value: 'cheque', label: 'Cheque' },
+                    { value: 'otro', label: 'Otro' }
+                  ]} 
+                />
+              </div>
+            </div>
+          )}
 
           {isGasto && (
             <div className="flex items-center gap-3 pt-2">
