@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { EventItem, AiSuggestion } from '@/types';
-import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFromTotal } from '@/lib/utils';
+import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFromTotal, calculateFinancialsFromMargin } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +69,17 @@ export function AiSuggestionsGrid({
   const [distributeItem, setDistributeItem] = useState<EventItem | null>(null);
   const [highlightedIds, setHighlightedIds] = useState<string[]>([]);
   const [mermas, setMermas] = useState<number>(0);
+  const [targetEventMargin, setTargetEventMargin] = useState<number>(35);
+  const [isOptimizingWithAi, setIsOptimizingWithAi] = useState(false);
+  const [pendingSuggestions, setPendingSuggestions] = useState<Record<string, {
+    margen: number;
+    ganancia: number;
+    valor_total: number;
+    valor_neto: number;
+    iva: number;
+    justificacion?: string;
+  }> | null>(null);
+  const [strategyExplanation, setStrategyExplanation] = useState<string | null>(null);
   const [undoStack, setUndoStack] = useState<GridAction[]>([]);
   const [redoStack, setRedoStack] = useState<GridAction[]>([]);
   const [focusedItemState, setFocusedItemState] = useState<EventItem | null>(null);
@@ -185,7 +196,7 @@ export function AiSuggestionsGrid({
     if (!targetItem) return;
 
     let newValue = value;
-    if (['costo', 'costo_total', 'ganancia', 'cantidad', 'valor_total'].includes(field)) {
+    if (['costo', 'costo_total', 'ganancia', 'cantidad', 'valor_total', 'margen'].includes(field)) {
       newValue = parseFloat(value) || 0;
     }
 
@@ -216,14 +227,49 @@ export function AiSuggestionsGrid({
       }
     }
 
-    // Recalculate financials
-    if (field === 'valor_total') {
+    // Recalculate financials de forma bidireccional
+    if (field === 'margen') {
+      const targetMargin = Math.max(0, newValue);
+      const financials = calculateFinancialsFromMargin(
+        updatedItem.costo,
+        targetMargin,
+        currentTipoDoc,
+        currentIvaIncluido,
+        currentEsInsumo
+      );
+      updatedItem.ganancia = financials.ganancia;
+      updatedItem.valor_neto = financials.valorNeto;
+      updatedItem.iva = financials.ivaDebito;
+      updatedItem.valor_total = financials.valorTotal;
+      updatedItem.margen = targetMargin;
+    } else if (field === 'valor_total') {
       const financials = calculateGananciaFromTotal(updatedItem.costo, updatedItem.valor_total, currentTipoDoc, currentIvaIncluido, currentEsInsumo);
       updatedItem.ganancia = financials.ganancia;
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.ivaDebito;
       updatedItem.margen = financials.margen;
-    } else if (['costo', 'costo_total', 'ganancia', 'sin_ganancia', 'tipo_doc_costo', 'iva_incluido', 'es_insumo'].includes(field)) {
+    } else if (field === 'costo' || field === 'costo_total') {
+      // Si el ítem ya tenía un margen positivo explícito, recalculamos preservando el margen
+      if (updatedItem.margen && updatedItem.margen > 0) {
+        const financials = calculateFinancialsFromMargin(
+          updatedItem.costo,
+          updatedItem.margen,
+          currentTipoDoc,
+          currentIvaIncluido,
+          currentEsInsumo
+        );
+        updatedItem.ganancia = financials.ganancia;
+        updatedItem.valor_neto = financials.valorNeto;
+        updatedItem.iva = financials.ivaDebito;
+        updatedItem.valor_total = financials.valorTotal;
+      } else {
+        const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia, currentTipoDoc, currentIvaIncluido, currentEsInsumo);
+        updatedItem.valor_neto = financials.valorNeto;
+        updatedItem.iva = financials.ivaDebito;
+        updatedItem.valor_total = financials.valorTotal;
+        updatedItem.margen = financials.margen;
+      }
+    } else if (['ganancia', 'sin_ganancia', 'tipo_doc_costo', 'iva_incluido', 'es_insumo'].includes(field)) {
       const financials = calculateFinancials(updatedItem.costo, updatedItem.ganancia, currentTipoDoc, currentIvaIncluido, currentEsInsumo);
       updatedItem.valor_neto = financials.valorNeto;
       updatedItem.iva = financials.ivaDebito;
@@ -388,6 +434,179 @@ export function AiSuggestionsGrid({
       console.error(e);
       alert('Error al agregar el abono.');
     }
+  };
+
+  // Aplicar margen directo uniforme a todos los ítems (modo previsualización)
+  const handleApplyDirectMargin = (marginPercent: number) => {
+    const map: Record<string, any> = {};
+    editableSuggestions.forEach(item => {
+      if (item.es_insumo) return;
+      const fin = calculateFinancialsFromMargin(
+        item.costo,
+        marginPercent,
+        item.tipo_doc_costo || 'factura',
+        item.iva_incluido ?? true,
+        false
+      );
+      map[item.id!] = {
+        margen: marginPercent,
+        ganancia: fin.ganancia,
+        valor_neto: fin.valorNeto,
+        iva: fin.ivaDebito,
+        valor_total: fin.valorTotal,
+        justificacion: `Margen uniforme fijado al ${marginPercent}%`
+      };
+    });
+    setPendingSuggestions(map);
+    setStrategyExplanation(`Sugerencias calculadas: Se calibró un margen directo del ${marginPercent}% para todos los servicios de venta.`);
+  };
+
+  // Optimización inteligente de márgenes con IA
+  const handleOptimizeMarginsWithAi = async () => {
+    const nonInsumos = editableSuggestions.filter(it => !it.es_insumo);
+    if (nonInsumos.length === 0) {
+      alert('No hay servicios de venta en el borrador para optimizar márgenes.');
+      return;
+    }
+
+    setIsOptimizingWithAi(true);
+    try {
+      const res = await fetch('/api/ai/suggest-costs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'optimize_margins',
+          items: nonInsumos,
+          targetMargin: targetEventMargin
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Error al optimizar márgenes con IA');
+      }
+
+      const data = await res.json();
+      if (data.suggestions && Array.isArray(data.suggestions)) {
+        const map: Record<string, any> = {};
+        data.suggestions.forEach((sug: any) => {
+          const item = editableSuggestions.find(it => it.id === sug.id);
+          if (item) {
+            const fin = calculateFinancialsFromMargin(
+              item.costo,
+              sug.margen_sugerido,
+              item.tipo_doc_costo || 'factura',
+              item.iva_incluido ?? true,
+              false
+            );
+            map[sug.id] = {
+              margen: sug.margen_sugerido,
+              ganancia: fin.ganancia,
+              valor_neto: fin.valorNeto,
+              iva: fin.ivaDebito,
+              valor_total: fin.valorTotal,
+              justificacion: sug.justificacion
+            };
+          }
+        });
+        setPendingSuggestions(map);
+        setStrategyExplanation(data.resumen_estrategia || `Estrategia de rentabilidad calculada por IA para alcanzar ${targetEventMargin}% global.`);
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert('Error de IA al optimizar márgenes: ' + e.message);
+    } finally {
+      setIsOptimizingWithAi(false);
+    }
+  };
+
+  // Aceptar y aplicar todas las sugerencias de margen
+  const handleAcceptAllSuggestions = async () => {
+    if (!pendingSuggestions) return;
+    setLoadingId('accepting-all-margins');
+    try {
+      const updatedList = editableSuggestions.map(item => {
+        const sug = pendingSuggestions[item.id!];
+        if (sug) {
+          return {
+            ...item,
+            margen: sug.margen,
+            ganancia: sug.ganancia,
+            valor_neto: sug.valor_neto,
+            iva: sug.iva,
+            valor_total: sug.valor_total
+          };
+        }
+        return item;
+      });
+
+      // Actualizar en Supabase
+      const updates = Object.entries(pendingSuggestions).map(async ([id, sug]) => {
+        return (supabase.from('event_items') as any).update({
+          margen: sug.margen,
+          ganancia: sug.ganancia,
+          valor_neto: sug.valor_neto,
+          iva: sug.iva,
+          valor_total: sug.valor_total
+        }).eq('id', id);
+      });
+
+      await Promise.all(updates);
+      setEditableSuggestions(updatedList);
+      setPendingSuggestions(null);
+      setStrategyExplanation(null);
+      if (onDraftChanged) onDraftChanged();
+    } catch (e: any) {
+      console.error(e);
+      alert('Error al aplicar sugerencias: ' + e.message);
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  // Aceptar sugerencia individual
+  const handleAcceptSingleSuggestion = async (itemId: string) => {
+    if (!pendingSuggestions || !pendingSuggestions[itemId]) return;
+    const sug = pendingSuggestions[itemId];
+    try {
+      const updatedItem = editableSuggestions.find(it => it.id === itemId);
+      if (!updatedItem) return;
+
+      const newItem = {
+        ...updatedItem,
+        margen: sug.margen,
+        ganancia: sug.ganancia,
+        valor_neto: sug.valor_neto,
+        iva: sug.iva,
+        valor_total: sug.valor_total
+      };
+
+      await (supabase.from('event_items') as any).update({
+        margen: sug.margen,
+        ganancia: sug.ganancia,
+        valor_neto: sug.valor_neto,
+        iva: sug.iva,
+        valor_total: sug.valor_total
+      }).eq('id', itemId);
+
+      setEditableSuggestions(prev => prev.map(it => it.id === itemId ? newItem : it));
+      setPendingSuggestions(prev => {
+        if (!prev) return null;
+        const copy = { ...prev };
+        delete copy[itemId];
+        return Object.keys(copy).length > 0 ? copy : null;
+      });
+      if (onDraftChanged) onDraftChanged();
+    } catch (e: any) {
+      console.error(e);
+      alert('Error al aceptar la sugerencia del ítem.');
+    }
+  };
+
+  // Descartar sugerencias
+  const handleRejectAllSuggestions = () => {
+    setPendingSuggestions(null);
+    setStrategyExplanation(null);
   };
 
 
@@ -1540,6 +1759,7 @@ export function AiSuggestionsGrid({
     const isDragged = draggedItemId === item.id;
     const isConsolidated = hasChildren || item.tipo_evento?.toLowerCase() === 'consolidado';
     const isHighlighted = highlightedIds.includes(item.id!);
+    const hasPendingSuggestion = !!(pendingSuggestions && pendingSuggestions[item.id!]);
 
     return (
       <TableRow 
@@ -1581,6 +1801,8 @@ export function AiSuggestionsGrid({
           isChild ? 'bg-muted/10 border-l-4 border-l-primary/30' : ''
         } ${
           isDragged ? 'opacity-30 border-dashed border-primary/50 bg-primary/5 scale-[0.99]' : ''
+        } ${
+          hasPendingSuggestion ? 'bg-emerald-50/50 dark:bg-emerald-950/25 border-l-4 border-l-emerald-500 shadow-2xs' : ''
         } ${
           isTarget
             ? isConsolidated
@@ -1805,6 +2027,11 @@ export function AiSuggestionsGrid({
                 >
                   {(item.ganancia === 0 && item.costo > 0) ? "SIN GANANCIA" : "CON GANANCIA"}
                 </button>
+                {hasPendingSuggestion && (
+                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/80 px-1 py-0.5 rounded border border-emerald-200 text-center">
+                    Sugerida: {formatCLP(pendingSuggestions[item.id!].ganancia)}
+                  </span>
+                )}
               </div>
             </TableCell>
             <TableCell className="p-2 align-top text-center bg-emerald-50/30">
@@ -1828,13 +2055,51 @@ export function AiSuggestionsGrid({
                 >
                   {(item.iva_incluido ?? true) ? "CON IVA" : "SIN IVA"}
                 </button>
+                {hasPendingSuggestion && (
+                  <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100/80 px-1 py-0.5 rounded border border-emerald-200 text-center">
+                    Sugerido: {formatCLP(pendingSuggestions[item.id!].valor_total)}
+                  </span>
+                )}
               </div>
             </TableCell>
             <TableCell className="p-2 align-top text-right font-bold text-emerald-700 bg-emerald-50/30 border-r">{formatCLP(item.valor_total * item.cantidad)}</TableCell>
           </>
         )}
         {/* RESUMEN Y ACCIONES */}
-        <TableCell className="p-2 align-top text-center text-xs font-semibold text-muted-foreground">{formatPercentage(item.margen)}</TableCell>
+        <TableCell className="p-2 align-top text-center">
+          {(item.es_insumo ?? false) ? (
+            <span className="text-xs text-muted-foreground italic">—</span>
+          ) : (
+            <div className="flex flex-col items-center gap-1">
+              <div className="flex items-center justify-center gap-1">
+                <Input
+                  type="number"
+                  value={item.margen !== undefined && item.margen !== null ? Number(item.margen.toFixed(1)) : 0}
+                  onChange={(e) => handleInputChange(item.id!, 'margen', e.target.value)}
+                  onFocus={() => handleFocus(item.id!)}
+                  onBlur={(e) => handleBlur(item.id!, e)}
+                  className="h-8 w-14 text-center text-xs font-bold px-1 border-indigo-200/80 focus:border-indigo-500 bg-background shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  min="0"
+                  max="500"
+                  step="1"
+                  title="Margen neto sobre costo (%) - Escribe para recalcular ganancia y precio"
+                />
+                <span className="text-[10px] text-muted-foreground font-semibold">%</span>
+              </div>
+              {pendingSuggestions && pendingSuggestions[item.id!] && (
+                <button
+                  type="button"
+                  onClick={() => handleAcceptSingleSuggestion(item.id!)}
+                  className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 animate-pulse transition-all shadow-2xs flex items-center gap-0.5"
+                  title={`Clic para aceptar sugerencia de la IA: ${pendingSuggestions[item.id!].margen}% (${formatCLP(pendingSuggestions[item.id!].ganancia)})`}
+                >
+                  <span>Sugerido: {pendingSuggestions[item.id!].margen}%</span>
+                  <Check className="h-2.5 w-2.5 ml-0.5" />
+                </button>
+              )}
+            </div>
+          )}
+        </TableCell>
         <TableCell className="p-2 align-top text-center">
           <div className="flex items-center justify-center gap-1.5">
             {!isChild && hasChildren && (
@@ -2002,6 +2267,130 @@ export function AiSuggestionsGrid({
           )}
         </div>
       </div>
+
+      {/* SIMULADOR Y OPTIMIZADOR DE MARGEN OBJETIVO */}
+      {editableSuggestions.length > 0 && (
+        <div className="bg-gradient-to-r from-indigo-50/70 via-background to-emerald-50/70 border border-indigo-100 dark:border-indigo-950/40 rounded-xl p-3.5 space-y-2.5 shadow-2xs">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-indigo-600 text-white shadow-2xs">
+                <TrendingUp className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-foreground">Optimizador de Margen del Evento</span>
+                  <Badge variant="outline" className="text-[10px] font-bold bg-background text-indigo-700 border-indigo-200">
+                    Actual: {formatPercentage(costoTotalGlobal > 0 ? (totalesFacturables.ganancia / costoTotalGlobal) * 100 : 0)}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Fija el margen neto deseado para todo el evento o para cada servicio individual en la tabla.
+                </p>
+              </div>
+            </div>
+
+            {/* Controles de Margen */}
+            <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+              <span className="text-[11px] font-semibold text-muted-foreground mr-1">Margen Objetivo:</span>
+              {[20, 25, 30, 35, 40, 50].map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => setTargetEventMargin(pct)}
+                  className={`px-2 py-0.5 text-xs font-bold rounded-md transition-all ${
+                    targetEventMargin === pct
+                      ? 'bg-indigo-600 text-white shadow-2xs scale-105'
+                      : 'bg-background hover:bg-muted text-muted-foreground border border-border/80'
+                  }`}
+                >
+                  {pct}%
+                </button>
+              ))}
+              <div className="flex items-center gap-1 ml-1 bg-background border border-border/80 rounded-md px-1.5 py-0.5">
+                <input
+                  type="number"
+                  min="1"
+                  max="500"
+                  value={targetEventMargin || ''}
+                  onChange={(e) => setTargetEventMargin(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-10 text-center text-xs font-bold bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  placeholder="35"
+                />
+                <span className="text-[10px] font-bold text-muted-foreground">%</span>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleApplyDirectMargin(targetEventMargin)}
+                className="h-7 text-xs font-semibold gap-1 bg-background hover:bg-indigo-50 hover:text-indigo-700 border-indigo-200 ml-1 shadow-2xs"
+                title="Aplica este margen directamente a todos los servicios de venta"
+              >
+                <span>Calcular Directo</span>
+              </Button>
+
+              <Button
+                size="sm"
+                onClick={handleOptimizeMarginsWithAi}
+                disabled={isOptimizingWithAi}
+                className="h-7 text-xs font-bold gap-1 bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white shadow-2xs"
+                title="La IA distribuye los márgenes estratégicamente según el rubro de cada servicio para alcanzar el objetivo global"
+              >
+                {isOptimizingWithAi ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                <span>Optimizar con IA</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* BANNER DE PREVISUALIZACIÓN Y ACEPTACIÓN */}
+          {pendingSuggestions && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-1">
+              <div className="flex items-start gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+                <div className="text-xs">
+                  <div className="font-bold text-emerald-950 dark:text-emerald-100">
+                    Sugerencias de Margen Listas ({Object.keys(pendingSuggestions).length} servicios recalculados)
+                  </div>
+                  {strategyExplanation && (
+                    <p className="text-[11px] text-emerald-800/90 dark:text-emerald-200/90 mt-0.5">
+                      {strategyExplanation}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRejectAllSuggestions}
+                  className="h-7 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 border-border/80"
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Descartar
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleAcceptAllSuggestions}
+                  disabled={loadingId === 'accepting-all-margins'}
+                  className="h-7 text-xs font-bold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                >
+                  {loadingId === 'accepting-all-margins' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <CheckCheck className="h-3.5 w-3.5" />
+                  )}
+                  Aceptar y Aplicar Sugerencias
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table Container */}
       <div className="border rounded-xl overflow-x-auto shadow-xs bg-card custom-scrollbar">
@@ -2188,7 +2577,28 @@ export function AiSuggestionsGrid({
                 </>
               )}
               {/* RESUMEN Y ACCIONES MANUAL */}
-              <TableCell className="p-2 align-top text-center text-xs font-semibold text-muted-foreground">{formatPercentage(manualItem.margen)}</TableCell>
+              <TableCell className="p-2 align-top text-center">
+                {(manualItem.es_insumo ?? false) ? (
+                  <span className="text-xs text-muted-foreground italic">—</span>
+                ) : (
+                  <div className="flex items-center justify-center gap-1">
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={manualItem.margen || ''}
+                      onChange={(e) => handleInputChange('manual', 'margen', e.target.value)}
+                      onFocus={() => handleFocus('manual')}
+                      onBlur={(e) => handleBlur('manual', e)}
+                      className="h-8 w-14 text-center text-xs font-bold px-1 bg-background/90 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      min="0"
+                      max="500"
+                      step="1"
+                      title="Margen neto sobre costo (%)"
+                    />
+                    <span className="text-[10px] text-muted-foreground font-semibold">%</span>
+                  </div>
+                )}
+              </TableCell>
               <TableCell className="p-2 align-top text-center">
                 <Button
                   size="sm"

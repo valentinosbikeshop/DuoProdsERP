@@ -18,6 +18,48 @@ export function formatPercentage(value: number): string {
   return `${value.toFixed(1)}%`;
 }
 
+export function calculateFinancialsFromMargin(
+  costo: number,
+  margenPorcentaje: number,
+  tipoDoc: 'factura' | 'boleta' = 'factura',
+  aplicaIvaVenta: boolean = true,
+  esInsumo: boolean = false
+) {
+  const costoNeto = tipoDoc === 'boleta' ? costo : Math.round(costo / 1.19);
+  const ivaCredito = costo - costoNeto;
+
+  if (esInsumo) {
+    return {
+      costoNeto,
+      ivaCredito,
+      ganancia: 0,
+      valorNeto: 0,
+      iva: 0,
+      ivaDebito: 0,
+      valorTotal: 0,
+      margen: 0
+    };
+  }
+
+  // Margen sobre costo neto (Markup)
+  const safeMargin = Math.max(0, margenPorcentaje || 0);
+  const ganancia = Math.round(costoNeto * (safeMargin / 100));
+  const valorNeto = costoNeto + ganancia;
+  const ivaDebito = aplicaIvaVenta ? Math.round(valorNeto * 0.19) : 0;
+  const valorTotal = valorNeto + ivaDebito;
+
+  return {
+    costoNeto,
+    ivaCredito,
+    ganancia,
+    valorNeto,
+    iva: ivaDebito,
+    ivaDebito,
+    valorTotal,
+    margen: Math.round(safeMargin * 10) / 10
+  };
+}
+
 export function calculateFinancials(
   costo: number, 
   ganancia: number, 

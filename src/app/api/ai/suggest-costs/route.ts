@@ -37,19 +37,108 @@ export async function POST(req: NextRequest) {
       parsedDocuments = '', 
       eventType = '',
       customPrompt = '',
-      customQuoteLocation = ''
+      customQuoteLocation = '',
+      targetMargin,
+      mode = 'suggest_costs',
+      items = []
     } = body;
-
-    // Input validation: at least one input must be provided
-    if (!eventDescription && !customPrompt && !parsedDocuments) {
-      return NextResponse.json({ error: 'Se requiere al menos una descripción, prompt o documento' }, { status: 400 });
-    }
 
     if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
         { error: 'Falta configurar GEMINI_API_KEY en las Variables de Entorno de Vercel. Por favor agrégala en Vercel > Settings > Environment Variables.' },
         { status: 500 }
       );
+    }
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const modelsToTry = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+
+    // MODO: Optimización Inteligente de Márgenes de Ítems Existentes
+    if (mode === 'optimize_margins') {
+      if (!items || items.length === 0) {
+        return NextResponse.json({ error: 'No se enviaron ítems para optimizar' }, { status: 400 });
+      }
+
+      const desiredMargin = typeof targetMargin === 'number' ? targetMargin : 35;
+
+      const optimizeSchema = {
+        type: Type.OBJECT,
+        properties: {
+          suggestions: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING, description: 'ID exacto del ítem proporcionado' },
+                margen_sugerido: { type: Type.NUMBER, description: 'Margen porcentual sugerido (ej: 35 para 35%)' },
+                ganancia_sugerida: { type: Type.NUMBER, description: 'Ganancia neta sugerida por unidad en CLP' },
+                justificacion: { type: Type.STRING, description: 'Breve justificación comercial o de mercado' }
+              },
+              required: ['id', 'margen_sugerido', 'ganancia_sugerida', 'justificacion']
+            }
+          },
+          resumen_estrategia: { 
+            type: Type.STRING, 
+            description: 'Explicación ejecutiva de cómo se distribuyeron los márgenes para alcanzar el objetivo global' 
+          }
+        },
+        required: ['suggestions', 'resumen_estrategia']
+      };
+
+      const itemsText = items
+        .filter((it: any) => !it.es_insumo)
+        .map((it: any) => `- ID: "${it.id}" | Servicio: "${it.servicio}" | Detalle: "${it.detalle || ''}" | Costo Unitario: $${it.costo} | Cantidad: ${it.cantidad} | Margen Actual: ${it.margen || 0}% | Tipo Doc: ${it.tipo_doc_costo || 'factura'}`)
+        .join('\n');
+
+      const optimizePrompt = `Eres el Director Financiero de DUO Producciones en Chile.
+El usuario ha establecido un MARGEN NETO OBJETIVO GLOBAL del ${desiredMargin}% para este evento.
+
+LISTA DE SERVICIOS EN BORRADOR A OPTIMIZAR:
+${itemsText}
+
+DIRECTRICES DE DISTRIBUCIÓN ESTRATÉGICA:
+1. Distribuye los márgenes según la naturaleza de cada rubro en el mercado chileno de eventos:
+   - Servicios básicos, compras directas de abarrotes o fletes suelen aceptar márgenes moderados (15% a 25%).
+   - Gastronomía de autor, coctelería, iluminación, DJ, sonido y producción técnica exclusiva soportan márgenes más elevados (35% a 55%).
+2. El promedio ponderado de rentabilidad sobre el costo total del evento debe converger exactamente al ${desiredMargin}% solicitado.
+3. Para cada ítem, calcula: ganancia_sugerida = Math.round(costoNeto * (margen_sugerido / 100)).
+4. En 'resumen_estrategia', explica en 2-3 frases cómo esta asignación protege el margen global del ${desiredMargin}% asegurando que la propuesta sea comercialmente atractiva y competitiva para el cliente.`;
+
+      let optResponse;
+      let optRetries = 3;
+      let optModelIndex = 0;
+
+      while (optRetries > 0) {
+        try {
+          const targetModel = modelsToTry[optModelIndex];
+          optResponse = await ai.models.generateContent({
+            model: targetModel,
+            contents: [{ role: 'user', parts: [{ text: optimizePrompt }] }],
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: optimizeSchema,
+              temperature: 0.2,
+            }
+          });
+          break;
+        } catch (e: any) {
+          optRetries--;
+          optModelIndex = Math.min(optModelIndex + 1, modelsToTry.length - 1);
+          if (optRetries === 0) throw e;
+          await new Promise(r => setTimeout(r, 800));
+        }
+      }
+
+      if (!optResponse || !optResponse.text) {
+        throw new Error('Sin respuesta del motor de optimización de márgenes');
+      }
+
+      return NextResponse.json(JSON.parse(optResponse.text));
+    }
+
+    // Input validation para modo estándar: al menos una descripción, prompt o documento
+    if (!eventDescription && !customPrompt && !parsedDocuments) {
+      return NextResponse.json({ error: 'Se requiere al menos una descripción, prompt o documento' }, { status: 400 });
     }
 
     // Cargar catálogo referencial de forma tolerante a fallos
@@ -76,8 +165,6 @@ export async function POST(req: NextRequest) {
     } catch (catalogErr) {
       console.warn('Advertencia al consultar master_costs (usando catálogo base):', catalogErr);
     }
-
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const responseSchema = {
       type: Type.OBJECT,
@@ -129,8 +216,7 @@ REGLAS FINANCIERAS Y DE MERCADO CHILENO:
    - iva = Math.round(valor_neto * 0.19)
    - valor_total = valor_neto + iva
    - margen = costo > 0 ? (ganancia / costo) * 100 : 0
-3. Asigna un margen de ganancia razonable para la productora (usualmente entre 25% y 40% sobre el costo unitario, o según catálogo).
-`;
+3. ${targetMargin ? `MARGEN OBJETIVO EXIGIDO: El usuario requiere un margen de ganancia promedio del ${targetMargin}%. Calibra las ganancias sugeridas para que el margen promedio de los servicios propuestos sea de aproximadamente ${targetMargin}%.` : 'Asigna un margen de ganancia razonable para la productora (usualmente entre 25% y 40% sobre el costo unitario, o según catálogo).'}`;
 
     let userPrompt = '';
 
@@ -169,7 +255,6 @@ Tipo de evento: ${eventType}`;
     let response;
     let retries = 3;
     let delay = 1000;
-    const modelsToTry = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
     let currentModelIndex = 0;
     
     while (retries > 0) {

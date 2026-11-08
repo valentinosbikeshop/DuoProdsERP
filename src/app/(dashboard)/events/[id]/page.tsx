@@ -49,6 +49,7 @@ export default function EventDetailPage() {
   const [parsedText, setParsedText] = useState<string>('');
   const [customPrompt, setCustomPrompt] = useState<string>('');
   const [customQuoteLocation, setCustomQuoteLocation] = useState<string>('');
+  const [aiTargetMargin, setAiTargetMargin] = useState<number>(35);
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [customAiLoading, setCustomAiLoading] = useState(false);
@@ -134,6 +135,7 @@ export default function EventDetailPage() {
           eventDescription: event.description,
           parsedDocuments: parsedText,
           eventType: event.status,
+          targetMargin: aiTargetMargin,
         }),
       });
 
@@ -190,6 +192,7 @@ export default function EventDetailPage() {
           customQuoteLocation: customQuoteLocation.trim(),
           eventDescription: event?.description || '',
           eventType: event?.status || '',
+          targetMargin: aiTargetMargin,
         }),
       });
 
@@ -486,24 +489,38 @@ export default function EventDetailPage() {
                         }
                       }}
                     />
-                    <div className="absolute bottom-1.5 right-1.5 left-1.5 flex justify-between items-center">
-                      {event.has_retail_sales ? (
-                        <input
-                          type="text"
-                          value={customQuoteLocation}
-                          onChange={(e) => setCustomQuoteLocation(e.target.value)}
-                          placeholder="Lugar cotización (Opcional)"
-                          className="w-40 rounded-md border-0 bg-transparent px-1.5 py-1 text-[11px] text-muted-foreground focus-visible:outline-none focus-visible:ring-0"
-                          disabled={customAiLoading || isCompleted}
-                        />
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground/60 pl-2 hidden sm:inline">Presiona Enter para enviar</span>
-                      )}
+                    <div className="absolute bottom-1.5 right-1.5 left-1.5 flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        {event.has_retail_sales ? (
+                          <input
+                            type="text"
+                            value={customQuoteLocation}
+                            onChange={(e) => setCustomQuoteLocation(e.target.value)}
+                            placeholder="Lugar cotización (Opcional)"
+                            className="w-36 rounded-md border-0 bg-transparent px-1.5 py-1 text-[11px] text-muted-foreground focus-visible:outline-none focus-visible:ring-0"
+                            disabled={customAiLoading || isCompleted}
+                          />
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/60 pl-1 hidden sm:inline">Enter para enviar</span>
+                        )}
+                        <div className="flex items-center gap-1 bg-background/80 border border-border/80 rounded px-1.5 py-0.5" title="Margen neto objetivo sugerido por la IA para este desglose">
+                          <span className="text-[10px] text-muted-foreground font-semibold">Margen IA:</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="300"
+                            value={aiTargetMargin}
+                            onChange={(e) => setAiTargetMargin(Math.max(0, parseFloat(e.target.value) || 0))}
+                            className="w-8 text-center text-[11px] font-bold bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-indigo-700"
+                          />
+                          <span className="text-[10px] text-muted-foreground font-bold">%</span>
+                        </div>
+                      </div>
                       <Button 
                         onClick={handleGenerateCustomBreakdown} 
                         disabled={customAiLoading || !customPrompt.trim() || isCompleted}
                         size="sm"
-                        className="h-6 rounded-md text-[11px] px-2"
+                        className="h-6 rounded-md text-[11px] px-2 font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs"
                       >
                         {customAiLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
                         Generar
@@ -551,6 +568,7 @@ export default function EventDetailPage() {
                               customPrompt: "Extrae de este documento (factura/boleta/cotización) todos los artículos de compra y cantidades para el borrador de costos.",
                               eventDescription: text,
                               eventType: event?.status || '',
+                              targetMargin: aiTargetMargin,
                             }),
                           });
                           
