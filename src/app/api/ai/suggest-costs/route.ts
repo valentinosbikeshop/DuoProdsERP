@@ -45,26 +45,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Se requiere al menos una descripción, prompt o documento' }, { status: 400 });
     }
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    const { data: masterCosts, error } = await supabaseAdmin
-      .from('master_costs')
-      .select('*');
-
-    if (error) {
-      console.error('Error fetching master costs:', error);
-      return NextResponse.json({ error: 'Error fetching catalog' }, { status: 500 });
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: 'Falta configurar GEMINI_API_KEY en las Variables de Entorno de Vercel. Por favor agrégala en Vercel > Settings > Environment Variables.' },
+        { status: 500 }
+      );
     }
 
-    const catalogString = masterCosts
-      ?.map(
-        (item) =>
-          `- ${item.servicio} | Detalle: ${item.tiempo_detalle} | Tipo: ${item.tipo_evento} | Costo: ${item.costo} | Ganancia: ${item.ganancia}`
-      )
-      .join('\n') || 'No hay servicios en el catálogo.';
+    // Cargar catálogo referencial de forma tolerante a fallos
+    let catalogString = 'No hay servicios en el catálogo.';
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (supabaseUrl && supabaseKey) {
+        const supabaseClient = createClient(supabaseUrl, supabaseKey);
+        const { data: masterCosts } = await supabaseClient
+          .from('master_costs')
+          .select('*');
+
+        if (masterCosts && masterCosts.length > 0) {
+          catalogString = masterCosts
+            .map(
+              (item) =>
+                `- ${item.servicio} | Detalle: ${item.tiempo_detalle} | Tipo: ${item.tipo_evento} | Costo: ${item.costo} | Ganancia: ${item.ganancia}`
+            )
+            .join('\n');
+        }
+      }
+    } catch (catalogErr) {
+      console.warn('Advertencia al consultar master_costs (usando catálogo base):', catalogErr);
+    }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -158,7 +169,7 @@ Tipo de evento: ${eventType}`;
     let response;
     let retries = 3;
     let delay = 1000;
-    const modelsToTry = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash'];
+    const modelsToTry = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
     let currentModelIndex = 0;
     
     while (retries > 0) {

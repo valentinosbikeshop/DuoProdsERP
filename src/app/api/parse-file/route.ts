@@ -99,11 +99,17 @@ export async function POST(req: NextRequest) {
       }).join('\n\n');
     } 
     else if (fileType.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.heic'].some(ext => fileName.endsWith(ext))) {
+      if (!process.env.GEMINI_API_KEY) {
+        return NextResponse.json(
+          { error: 'Falta configurar GEMINI_API_KEY en las Variables de Entorno de Vercel.' },
+          { status: 500 }
+        );
+      }
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const base64Data = buffer.toString('base64');
       
       const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-3.5-flash',
         contents: [
           {
             role: 'user',

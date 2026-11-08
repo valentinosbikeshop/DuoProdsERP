@@ -891,56 +891,59 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
           )}
         </TableCell>
         
-        {/* EGRESOS */}
+        {/* EGRESOS (COSTOS) */}
         <TableCell className="p-2 bg-red-50/30">
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium" title={hasChildren ? "Costo unitario resultante (Total insumos ÷ Cantidad)" : "Costo unitario"}>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium">
               {formatCLP(item.costo)}
             </span>
-            {hasChildren && (
-              <span className="text-[10px] text-red-700 font-semibold whitespace-nowrap" title="Costo total de insumos consolidados">
-                Total: {formatCLP(item.costo * item.cantidad)}
+            <div className="flex items-center gap-1">
+              <span className={`text-[9px] px-1 py-0.2 rounded border font-bold uppercase tracking-wider text-center w-max ${item.tipo_doc_costo === "boleta" ? "bg-orange-100 text-orange-800 border-orange-200" : "bg-blue-100 text-blue-800 border-blue-200"}`}>
+                {item.tipo_doc_costo || "factura"}
               </span>
-            )}
-            <span className={`text-[9px] px-1 py-0.5 rounded border font-bold uppercase tracking-wider text-center w-max ${item.tipo_doc_costo === 'boleta' ? 'bg-orange-100 text-orange-800 border-orange-200' : 'bg-blue-100 text-blue-800 border-blue-200'}`}>
-              {item.tipo_doc_costo || 'factura'}
-            </span>
+              {item.tipo_doc_costo === "factura" && (
+                <span className="text-[9px] text-muted-foreground">
+                  (Neto {formatCLP(Math.round(item.costo / 1.19))})
+                </span>
+              )}
+            </div>
           </div>
         </TableCell>
-        <TableCell className={`p-2 text-right text-xs font-medium bg-red-50/30 ${isChild ? 'text-red-900/50' : 'text-red-900/70'}`}>
-          {(() => {
-             const fin = calculateFinancials(item.costo, item.ganancia, item.tipo_doc_costo || 'factura', item.iva_incluido ?? true);
-             return formatCLP(fin.ivaCredito * item.cantidad);
-          })()}
+        <TableCell className={`p-2 text-right font-bold bg-red-50/30 border-r ${isChild ? "text-red-700/60" : "text-red-700"}`}>
+          {formatCLP(item.costo * item.cantidad)}
         </TableCell>
-        <TableCell className={`p-2 text-right font-bold bg-red-50/30 border-r ${isChild ? 'text-red-700/60' : 'text-red-700'}`}>{formatCLP(item.costo * item.cantidad)}</TableCell>
 
-        {/* INGRESOS */}
+        {/* INGRESOS (VENTA) */}
         {(item.es_insumo ?? false) ? (
-          <TableCell colSpan={6} className="p-2 align-middle text-center bg-muted/30 border-r">
+          <TableCell colSpan={3} className="p-2 align-middle text-center bg-muted/30 border-r">
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest bg-muted/50 px-3 py-1 rounded">
-              Costo Interno (Insumo)
+              Insumo Interno (Consolidado)
             </span>
           </TableCell>
         ) : (
           <>
-            <TableCell className={`p-2 text-sm bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80 font-medium'}`}>{formatCLP(item.ganancia)}</TableCell>
-            <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.valor_neto)}</TableCell>
-            <TableCell className="p-2 align-middle text-center bg-emerald-50/30">
-               <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider text-center border ${
-                   (item.iva_incluido ?? true)
-                     ? 'bg-blue-100 text-blue-800 border-blue-200'
-                     : 'bg-zinc-100 text-zinc-500 border-zinc-200'
-                 }`}>
-                 {(item.iva_incluido ?? true) ? 'CON IVA' : 'SIN IVA'}
-               </span>
+            <TableCell className={`p-2 text-sm bg-emerald-50/30 ${isChild ? "text-emerald-900/60" : "text-emerald-900/80 font-medium"}`}>
+              {formatCLP(item.ganancia)}
             </TableCell>
-            <TableCell className={`p-2 text-xs bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900/80'}`}>{formatCLP(item.iva * item.cantidad)}</TableCell>
-            <TableCell className={`p-2 text-sm font-semibold bg-emerald-50/30 ${isChild ? 'text-emerald-900/60' : 'text-emerald-900'}`}>{formatCLP(item.valor_total)}</TableCell>
-            <TableCell className={`p-2 text-right font-bold bg-emerald-50/30 border-r ${isChild ? 'text-emerald-700/60' : 'text-emerald-700'}`}>{formatCLP(item.valor_total * item.cantidad)}</TableCell>
+            <TableCell className="p-2 text-center bg-emerald-50/30">
+              <div className="flex flex-col items-center">
+                <span className="text-sm font-semibold text-emerald-900">
+                  {formatCLP(item.valor_total)}
+                </span>
+                <span className={`text-[8px] px-1 rounded font-bold uppercase ${
+                  (item.iva_incluido ?? true)
+                    ? "text-blue-700 bg-blue-50 border border-blue-200"
+                    : "text-zinc-500 bg-zinc-100"
+                }`}>
+                  {(item.iva_incluido ?? true) ? "IVA inc." : "Sin IVA"}
+                </span>
+              </div>
+            </TableCell>
+            <TableCell className={`p-2 text-right font-bold bg-emerald-50/30 border-r ${isChild ? "text-emerald-700/60" : "text-emerald-700"}`}>
+              {formatCLP(item.valor_total * item.cantidad)}
+            </TableCell>
           </>
         )}
-        
         {/* RESUMEN */}
         <TableCell className={`p-2 text-center text-xs font-semibold ${isChild ? 'text-muted-foreground/60' : 'text-muted-foreground'}`}>{formatPercentage(item.margen)}</TableCell>
         <TableCell className="p-2 text-center">
@@ -1028,59 +1031,61 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
 
   return (
     <div className="space-y-4">
-      {/* Resumen Ejecutivo de Cash & Rentabilidad Real */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent shadow-xs">
+      {/* Resumen Ejecutivo de Cash & Rentabilidad Real (Explicación Simple) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
               <Banknote className="h-4 w-4 text-emerald-600" />
-              Cash en Mano Inmediato
+              Dinero en Mano (Al Terminar)
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              Al Terminar Evento
+              Cash Inmediato
             </span>
           </div>
           <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400 mt-2">
             {formatCLP(cashInmediato)}
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">
-            Dinero líquido en bolsillo/cuenta: Cobro <span className="font-medium text-foreground">{formatCLP(totalVentaCliente)}</span> - Costos <span className="font-medium text-foreground">{formatCLP(costoTotalGlobal)}</span>.
+            Total que cobras <span className="font-semibold text-foreground">({formatCLP(totalVentaCliente)})</span> menos lo que pagas en compras <span className="font-semibold text-foreground">({formatCLP(costoTotalGlobal)})</span>.
           </p>
         </div>
 
-        <div className="p-3.5 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent shadow-xs">
+        <div className="p-4 rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-amber-800 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
               <Receipt className="h-4 w-4 text-amber-600" />
-              Reserva IVA (F29 SII)
+              Reserva para el IVA (SII F29)
             </span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${provisionIvaSII > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-green-100 text-green-800'}`}>
-              {provisionIvaSII > 0 ? 'Guardar p/ mes sig.' : 'Crédito a favor'}
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${provisionIvaSII > 0 ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-green-100 text-green-800"}`}>
+              {provisionIvaSII > 0 ? "A pagar el mes sig." : "Crédito a favor"}
             </span>
           </div>
-          <div className={`text-2xl font-black mt-2 ${provisionIvaSII > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-600'}`}>
+          <div className={`text-2xl font-black mt-2 ${provisionIvaSII > 0 ? "text-amber-700 dark:text-amber-400" : "text-emerald-600"}`}>
             {provisionIvaSII > 0 ? formatCLP(provisionIvaSII) : `${formatCLP(remanenteIvaFavor)} (a favor)`}
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">
-            IVA Débito ventas ({formatCLP(ivaDebitoTotal)}) menos IVA Crédito facturas ({formatCLP(ivaCreditoTotal)}).
+            {provisionIvaSII > 0
+              ? `Guarda este monto: IVA cobrado (${formatCLP(ivaDebitoTotal)}) menos IVA compras (-${formatCLP(ivaCreditoTotal)}).`
+              : "Tienes más crédito fiscal en compras que IVA por pagar. No pagarás IVA por este evento."}
           </p>
         </div>
 
-        <div className="p-3.5 rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent shadow-xs">
+        <div className="p-4 rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
               <TrendingUp className="h-4 w-4 text-blue-600" />
-              Ganancia Real Limpia
+              Tu Ganancia Limpia de Bolsillo
             </span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
               Margen: {formatPercentage(margenReal)}
             </span>
           </div>
-          <div className={`text-2xl font-black mt-2 ${gananciaNetaLimpia >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-rose-600'}`}>
+          <div className={`text-2xl font-black mt-2 ${gananciaNetaLimpia >= 0 ? "text-blue-700 dark:text-blue-400" : "text-rose-600"}`}>
             {formatCLP(gananciaNetaLimpia)}
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">
-            Utilidad 100% definitiva de los socios una vez pagado el IVA del evento al SII.
+            Utilidad real definitiva 100% tuya tras pagar costos y apartar el IVA.
           </p>
         </div>
       </div>
@@ -1144,16 +1149,16 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
       )}
       
       <div className="border rounded-md overflow-x-auto shadow-xs bg-card custom-scrollbar">
-        <Table className="min-w-[1380px]">
+        <Table className="w-full">
           <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
-              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
-              <TableHead colSpan={3} className="text-center font-bold text-red-700 bg-red-50/50 border-r">EGRESOS (COSTOS EMPRESA)</TableHead>
-              <TableHead colSpan={6} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">INGRESOS (VENTA CLIENTE)</TableHead>
-              <TableHead colSpan={isCompleted ? 2 : 3} className="text-center font-bold text-muted-foreground">RESUMEN Y GESTIÓN</TableHead>
+            <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0 text-[11px]">
+              <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL SERVICIO</TableHead>
+              <TableHead colSpan={2} className="text-center font-bold text-red-700 bg-red-50/50 border-r">COSTOS (PAGOS DUO)</TableHead>
+              <TableHead colSpan={3} className="text-center font-bold text-emerald-700 bg-emerald-50/50 border-r">VENTA CLIENTE (COBROS)</TableHead>
+              <TableHead colSpan={isCompleted ? 2 : 3} className="text-center font-bold text-muted-foreground">GESTIÓN</TableHead>
             </TableRow>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-[50px] text-center p-2">
+            <TableRow className="bg-muted/40 hover:bg-muted/40 text-[11px]">
+              <TableHead className="w-[45px] text-center p-2">
                 {!isCompleted && (
                   <input 
                     type="checkbox"
@@ -1164,25 +1169,21 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
                   />
                 )}
               </TableHead>
-              <TableHead className="min-w-[280px] text-xs font-bold uppercase tracking-wider">Servicio</TableHead>
-              <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
-              <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">Tipo</TableHead>
-              <TableHead className="w-[135px] min-w-[135px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
+              <TableHead className="min-w-[200px] text-xs font-bold uppercase tracking-wider">Servicio</TableHead>
+              <TableHead className="min-w-[150px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
+              <TableHead className="w-[85px] text-xs font-bold uppercase tracking-wider text-center">Tipo</TableHead>
+              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider text-center border-r">Cant.</TableHead>
               
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">Costo Unit.</TableHead>
-              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-red-50/20 text-red-900/80">IVA Crédito</TableHead>
-              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-red-50/20 border-r text-red-900/80">Total Costos</TableHead>
+              <TableHead className="w-[115px] text-xs font-bold uppercase tracking-wider text-right bg-red-50/20 border-r text-red-900/80">Total Costos</TableHead>
               
               <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">Ganancia Unit.</TableHead>
-              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Neto</TableHead>
-              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80 text-center">Facturable?</TableHead>
-              <TableHead className="w-[90px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">IVA Débito</TableHead>
-              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80">V. Total Unit.</TableHead>
-              <TableHead className="w-[110px] text-xs font-bold uppercase tracking-wider text-right bg-emerald-50/20 border-r text-emerald-900/80">Total Venta</TableHead>
+              <TableHead className="w-[120px] text-xs font-bold uppercase tracking-wider bg-emerald-50/20 text-emerald-900/80 text-center">Precio Venta</TableHead>
+              <TableHead className="w-[125px] text-xs font-bold uppercase tracking-wider text-right bg-emerald-50/20 border-r text-emerald-900/80">Total Venta</TableHead>
               
-              <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider text-center">Margen</TableHead>
-              <TableHead className="w-[90px] text-center text-xs font-bold uppercase tracking-wider">Documento</TableHead>
-              {!isCompleted && <TableHead className="w-[100px] text-center text-xs font-bold uppercase tracking-wider">Acciones</TableHead>}
+              <TableHead className="w-[75px] text-xs font-bold uppercase tracking-wider text-center">Margen</TableHead>
+              <TableHead className="w-[80px] text-center text-xs font-bold uppercase tracking-wider">Factura</TableHead>
+              {!isCompleted && <TableHead className="w-[95px] text-center text-xs font-bold uppercase tracking-wider">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1200,17 +1201,13 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
           </TableBody>
           <TableFooter>
             {/* Fila 1: Productos Facturables */}
-            <TableRow className="bg-emerald-50/10 font-semibold border-b">
+            <TableRow className="bg-emerald-50/10 font-semibold border-b text-xs">
               <TableCell colSpan={5} className="font-bold text-right border-r text-emerald-900/80">(+) Total Productos Facturables:</TableCell>
               <TableCell className="bg-red-50/20"></TableCell>
-              <TableCell className="bg-red-50/20"></TableCell>
-              <TableCell className="bg-red-50/20 border-r text-right text-red-700">{formatCLP(totalesFacturables.costo)}</TableCell>
+              <TableCell className="bg-red-50/20 border-r text-right text-red-700 font-bold">{formatCLP(totalesFacturables.costo)}</TableCell>
               
               <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.ganancia)}</TableCell>
-              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.valor_neto)}</TableCell>
               <TableCell className="bg-emerald-50/20"></TableCell>
-              <TableCell className="bg-emerald-50/20 text-emerald-900/80">{formatCLP(totalesFacturables.iva)}</TableCell>
-              <TableCell className="bg-emerald-50/20 text-emerald-900/80"></TableCell>
               <TableCell className="bg-emerald-50/20 border-r text-right font-bold text-emerald-700">{formatCLP(totalesFacturables.valor_total)}</TableCell>
               
               <TableCell colSpan={isCompleted ? 2 : 3}></TableCell>
@@ -1218,105 +1215,95 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
             
             {/* Fila 2: Insumos / Costos Operativos */}
             {totalesInsumos.costo > 0 && (
-              <TableRow className="bg-red-50/10 font-semibold border-b">
-                <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos y Operación:</TableCell>
-                <TableCell className="bg-red-50/20"></TableCell>
+              <TableRow className="bg-red-50/10 font-semibold border-b text-xs">
+                <TableCell colSpan={5} className="font-bold text-right border-r text-red-900/80">(-) Total Insumos Internos:</TableCell>
                 <TableCell className="bg-red-50/20"></TableCell>
                 <TableCell className="bg-red-50/20 border-r text-right font-bold text-red-700">{formatCLP(totalesInsumos.costo)}</TableCell>
                 
-                <TableCell colSpan={6} className="bg-muted/20 border-r text-center text-xs text-muted-foreground italic">
-                  Costos hundidos que merman la utilidad final
+                <TableCell colSpan={3} className="bg-muted/20 border-r text-center text-xs text-muted-foreground italic">
+                  Costos de insumos incluidos en recetas
                 </TableCell>
                 <TableCell colSpan={isCompleted ? 2 : 3}></TableCell>
               </TableRow>
             )}
 
-            {/* Fila 3: Cash en Mano Inmediato al terminar el evento */}
-            <TableRow className="bg-emerald-500/15 dark:bg-emerald-950/40 font-bold border-t-2 border-emerald-600/30">
+            {/* Fila 3: Cash en Mano Inmediato */}
+            <TableRow className="bg-emerald-500/15 dark:bg-emerald-950/40 font-bold border-t-2 border-emerald-600/30 text-xs">
               <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider text-emerald-900 dark:text-emerald-200">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1.5">
                   <Banknote className="h-4 w-4 text-emerald-600" />
-                  <span>💵 CASH EN MANO AL TERMINAR (Venta Total - Costo Total):</span>
+                  <span>💵 DINERO EN MANO (Cobro Total - Costos Totales):</span>
                 </div>
               </TableCell>
               <TableCell className="bg-red-50/40"></TableCell>
-              <TableCell className="bg-red-50/40"></TableCell>
-              <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-sm font-bold">
+              <TableCell className="bg-red-50/40 border-r text-right text-red-800 font-bold">
                 {formatCLP(costoTotalGlobal)}
               </TableCell>
               
-              <TableCell colSpan={5} className="bg-emerald-50/60 dark:bg-emerald-950/60 text-right text-emerald-950 dark:text-emerald-100 pr-4">
-                Dinero en Mano Inmediato: 
-                <span className={`ml-2 text-base font-black ${cashInmediato >= 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-red-600'}`}>
+              <TableCell colSpan={2} className="bg-emerald-50/60 dark:bg-emerald-950/60 text-right text-emerald-950 dark:text-emerald-100 pr-3">
+                Cash Inmediato en Mano: 
+                <span className={`ml-2 text-sm font-black ${cashInmediato >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-600"}`}>
                   {formatCLP(cashInmediato)}
                 </span>
-                <span className="text-[10px] text-muted-foreground block font-normal">
-                  (Liquidez en bolsillo/cuenta antes de F29)
-                </span>
               </TableCell>
-              <TableCell className="bg-emerald-50/60 dark:bg-emerald-950/60 border-r text-right font-black text-emerald-800 dark:text-emerald-300 text-base">
+              <TableCell className="bg-emerald-50/60 dark:bg-emerald-950/60 border-r text-right font-black text-emerald-800 dark:text-emerald-300 text-sm">
                 {formatCLP(totalVentaCliente)}
               </TableCell>
               
-              <TableCell className="text-center font-black text-emerald-700 dark:text-emerald-300 text-sm border-r">
+              <TableCell className="text-center font-black text-emerald-700 dark:text-emerald-300 text-xs border-r">
                 {formatPercentage(costoTotalGlobal > 0 ? (cashInmediato / costoTotalGlobal) * 100 : 0)}
               </TableCell>
               <TableCell colSpan={isCompleted ? 1 : 2}></TableCell>
             </TableRow>
 
             {/* Fila 4: Provisión IVA (F29 SII) */}
-            <TableRow className="bg-amber-500/10 dark:bg-amber-950/30 font-medium border-t border-amber-300/40 text-xs">
+            <TableRow className="bg-amber-500/10 dark:bg-amber-950/30 font-medium border-t border-amber-300/40 text-[11px]">
               <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider text-amber-900 dark:text-amber-200">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1.5">
                   <Receipt className="h-3.5 w-3.5 text-amber-600" />
-                  <span>🏛️ Provisión Estimada IVA (F29 SII):</span>
+                  <span>🏛️ Reserva Tributaria IVA (F29 SII):</span>
                 </div>
               </TableCell>
-              <TableCell colSpan={3} className="border-r text-center text-amber-800 dark:text-amber-300">
-                IVA Crédito (Compras): <span className="font-bold">{formatCLP(ivaCreditoTotal)}</span>
+              <TableCell colSpan={2} className="border-r text-center text-amber-800 dark:text-amber-300">
+                IVA Compras: <span className="font-bold">-{formatCLP(ivaCreditoTotal)}</span>
               </TableCell>
-              <TableCell colSpan={5} className="text-right text-amber-900 dark:text-amber-200 pr-4">
-                IVA Débito (Ventas): <span className="font-semibold">{formatCLP(ivaDebitoTotal)}</span>
-                <span className="mx-2 font-bold">|</span>
+              <TableCell colSpan={2} className="text-right text-amber-900 dark:text-amber-200 pr-3">
+                IVA Ventas: <span className="font-semibold">{formatCLP(ivaDebitoTotal)}</span>
+                <span className="mx-1.5 font-bold">|</span>
                 {provisionIvaSII > 0 ? (
-                  <>Monto a Reservar p/ SII: <span className="font-bold text-amber-700 dark:text-amber-300 ml-1">{formatCLP(provisionIvaSII)}</span></>
+                  <>A Pagar: <span className="font-bold text-amber-700 dark:text-amber-300 ml-1">{formatCLP(provisionIvaSII)}</span></>
                 ) : (
-                  <>Crédito a Favor: <span className="font-bold text-emerald-700 ml-1">{formatCLP(remanenteIvaFavor)}</span></>
+                  <>A Favor: <span className="font-bold text-emerald-700 ml-1">{formatCLP(remanenteIvaFavor)}</span></>
                 )}
               </TableCell>
               <TableCell className="border-r text-right font-bold text-amber-800 dark:text-amber-300">
-                {provisionIvaSII > 0 ? `-${formatCLP(provisionIvaSII)}` : '$0'}
+                {provisionIvaSII > 0 ? `-${formatCLP(provisionIvaSII)}` : "$0"}
               </TableCell>
               <TableCell colSpan={isCompleted ? 2 : 3}></TableCell>
             </TableRow>
 
             {/* Fila 5: Ganancia Neta Real Limpia */}
-            <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20">
+            <TableRow className="bg-muted/80 font-bold border-t-2 border-black/20 text-xs">
               <TableCell colSpan={5} className="text-right border-r uppercase tracking-wider text-foreground">
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-1.5">
                   <TrendingUp className="h-4 w-4 text-blue-600" />
-                  <span>💎 GANANCIA NETA REAL (Limpia tras impuestos):</span>
+                  <span>💎 TU GANANCIA LIMPIA DE BOLSILLO:</span>
                 </div>
               </TableCell>
               <TableCell className="bg-red-50/40"></TableCell>
-              <TableCell className="bg-red-50/40"></TableCell>
-              <TableCell className="bg-red-50/40 border-r text-right text-red-800 text-sm font-bold">
-                {formatCLP(costoTotalGlobal)}
-              </TableCell>
+              <TableCell className="bg-red-50/40 border-r text-right text-red-800 font-bold">{formatCLP(costoTotalGlobal)}</TableCell>
               
-              <TableCell colSpan={5} className="bg-blue-50/50 dark:bg-blue-950/40 text-right text-blue-950 dark:text-blue-100 pr-4">
-                Utilidad Definitiva (Cash - IVA SII): 
-                <span className={`ml-2 text-base font-black ${gananciaNetaLimpia >= 0 ? 'text-blue-700 dark:text-blue-400' : 'text-red-600'}`}>
+              <TableCell colSpan={2} className="bg-blue-50/50 dark:bg-blue-950/40 text-right text-blue-950 dark:text-blue-100 pr-3">
+                Utilidad 100% Definitiva: 
+                <span className={`ml-2 text-sm font-black ${gananciaNetaLimpia >= 0 ? "text-blue-700 dark:text-blue-400" : "text-red-600"}`}>
                   {formatCLP(gananciaNetaLimpia)}
                 </span>
               </TableCell>
-              <TableCell className="bg-blue-50/50 dark:bg-blue-950/40 border-r text-right font-black text-blue-800 dark:text-blue-300 text-base">
+              <TableCell className="bg-blue-50/50 dark:bg-blue-950/40 border-r text-right font-black text-blue-800 dark:text-blue-300 text-sm">
                 {formatCLP(totalVentaCliente)}
               </TableCell>
               
-              <TableCell className="text-center font-black text-blue-700 dark:text-blue-300 text-sm border-r">
-                {formatPercentage(margenReal)}
-              </TableCell>
+              <TableCell className="text-center font-black text-blue-700 dark:text-blue-300 text-xs border-r">{formatPercentage(margenReal)}</TableCell>
               <TableCell colSpan={isCompleted ? 1 : 2}></TableCell>
             </TableRow>
           </TableFooter>

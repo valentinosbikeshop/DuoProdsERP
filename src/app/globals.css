@@ -50,6 +50,9 @@
 }
 
 @layer base {
+  html {
+    zoom: 0.85;
+  }
   * {
     @apply border-border;
     scrollbar-width: thin;

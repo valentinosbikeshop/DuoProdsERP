@@ -34,6 +34,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Mensajes inválidos' }, { status: 400 });
     }
 
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json(
+        { error: 'Falta configurar GEMINI_API_KEY en las Variables de Entorno de Vercel. Por favor agrégala en Vercel > Settings > Environment Variables.' },
+        { status: 500 }
+      );
+    }
+
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     // Preparar contexto completo, detallado y jerárquico de todos los ítems
@@ -263,9 +270,10 @@ REGLAS DE INTERACCIÓN Y ANÁLISIS INTELIGENTE:
 
     // Familia de modelos activos en Gemini API
     const modelsToTry = [
-      'gemini-3.8-flash',
-      'gemini-3.7-flash',
-      'gemini-3.6-flash'
+      'gemini-3.5-flash',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.8-flash'
     ];
 
     let responseText: string | null = null;
