@@ -14,6 +14,7 @@ export default function CostsPage() {
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [strategicDialogOpen, setStrategicDialogOpen] = useState(false)
+  const [strategicProposalApplied, setStrategicProposalApplied] = useState(false)
   const [editingCost, setEditingCost] = useState<MasterCost | null>(null)
 
   const fetchCosts = async () => {
@@ -25,7 +26,13 @@ export default function CostsPage() {
       .order('servicio', { ascending: true })
     
     if (!error && data) {
-      setCosts(data)
+      const allCosts = data as MasterCost[];
+      const isApplied = allCosts.some((c) => c.servicio === '__SYSTEM_STRATEGIC_PROPOSAL_2026_APPLIED__') 
+        || (typeof window !== 'undefined' && localStorage.getItem('duo_strategic_proposal_2026_applied') === 'true');
+      setStrategicProposalApplied(isApplied);
+
+      const visibleData = allCosts.filter((c) => !c.servicio.startsWith('__SYSTEM_'));
+      setCosts(visibleData);
     }
     setLoading(false)
   }
@@ -62,14 +69,16 @@ export default function CostsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setStrategicDialogOpen(true)}
-            className="gap-2 border-indigo-200 text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100 shadow-2xs font-semibold"
-          >
-            <Sparkles className="h-4 w-4 text-indigo-600" />
-            Propuesta Estratégica 2026
-          </Button>
+          {!strategicProposalApplied && (
+            <Button
+              variant="outline"
+              onClick={() => setStrategicDialogOpen(true)}
+              className="gap-2 border-indigo-200 text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100 shadow-2xs font-semibold"
+            >
+              <Sparkles className="h-4 w-4 text-indigo-600" />
+              Propuesta Estratégica 2026
+            </Button>
+          )}
           <Button onClick={handleAdd}>
             <Plus className="mr-2 h-4 w-4" />
             Agregar Servicio

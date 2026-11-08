@@ -62,9 +62,10 @@ function Dialog({ open, onOpenChange, children, className }: DialogProps) {
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'relative z-[101] flex w-full max-w-lg md:max-w-xl flex-col rounded-2xl border border-border/80 bg-background shadow-2xl shadow-black/20',
-          'max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3.5rem)] overflow-hidden',
+          'relative z-[101] flex w-full flex-col rounded-2xl border border-border/80 bg-background shadow-2xl shadow-black/20',
+          'max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2.5rem)] overflow-hidden',
           'animate-in fade-in-0 zoom-in-95 duration-200',
+          className?.includes('max-w-') ? '' : 'max-w-lg md:max-w-xl',
           className
         )}
       >
