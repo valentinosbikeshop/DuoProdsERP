@@ -14,6 +14,7 @@ import { EventItemsTable } from '@/components/events/event-items-table';
 import { FloatingFinancialAdvisor } from '@/components/events/floating-financial-advisor';
 import { EditEventDialog } from '@/components/events/edit-event-dialog';
 import { TransactionDialog } from '@/components/events/transaction-dialog';
+import { ClientQuotePdfDialog } from '@/components/reports/client-quote-pdf-dialog';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/constants';
 import { formatDateCL, calculateFinancials } from '@/lib/utils';
 import { 
@@ -338,25 +339,28 @@ export default function EventDetailPage() {
           </div>
         </div>
         
-        {isCompleted ? (
-          <div className="flex gap-2">
-            <Button onClick={handleReopenEvent} disabled={finalizing} variant="outline" className="border-orange-200 text-orange-700 hover:bg-orange-50">
-              {finalizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowLeft className="mr-2 h-4 w-4" />}
-              Reabrir Edición
-            </Button>
-            <Link href={`/events/${id}/report`}>
-              <Button variant="default">
-                <FileText className="mr-2 h-4 w-4" />
-                Ver Informe
+        <div className="flex items-center gap-2">
+          {event && <ClientQuotePdfDialog event={event} items={items} />}
+          {isCompleted ? (
+            <div className="flex gap-2">
+              <Button onClick={handleReopenEvent} disabled={finalizing} variant="outline" className="border-orange-200 text-orange-700 hover:bg-orange-50">
+                {finalizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowLeft className="mr-2 h-4 w-4" />}
+                Reabrir Edición
               </Button>
-            </Link>
-          </div>
-        ) : (
-          <Button onClick={handleFinalizeEvent} disabled={finalizing || items.length === 0} variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800 border-green-200">
-            {finalizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
-            Finalizar Evento
-          </Button>
-        )}
+              <Link href={`/events/${id}/report`}>
+                <Button variant="default">
+                  <FileText className="mr-2 h-4 w-4" />
+                  Ver Informe
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <Button onClick={handleFinalizeEvent} disabled={finalizing || items.length === 0} variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800 border-green-200">
+              {finalizing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />}
+              Finalizar Evento
+            </Button>
+          )}
+        </div>
       </div>
 
       <Tabs defaultValue="info" className="space-y-6 mt-6">
@@ -642,11 +646,14 @@ export default function EventDetailPage() {
         {/* Tab 3: Ítems Aprobados */}
         <TabsContent value="items" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Ítems Aprobados</CardTitle>
-              <CardDescription>
-                Listado de todos los servicios y costos confirmados para este evento.
-              </CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between pb-4 border-b border-border/40">
+              <div>
+                <CardTitle>Presupuesto Oficial</CardTitle>
+                <CardDescription>
+                  Listado de todos los servicios y costos confirmados para este evento.
+                </CardDescription>
+              </div>
+              {event && <ClientQuotePdfDialog event={event} items={items} />}
             </CardHeader>
             <CardContent>
               <EventItemsTable 

@@ -16,7 +16,7 @@ import {
   TableRow,
   TableFooter,
 } from '@/components/ui/table';
-import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork, GripVertical, Undo2, Redo2, Banknote, Receipt, TrendingUp } from 'lucide-react';
+import { Check, X, Loader2, Plus, CheckCheck, Trash2, Sparkles, ClipboardList, ChevronDown, ChevronRight, Combine, Copy, Split, GitFork, GripVertical, Undo2, Redo2, Banknote, Receipt, TrendingUp, MapPin } from 'lucide-react';
 import { useDragAutoScroll } from '@/hooks/use-drag-auto-scroll';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
@@ -80,6 +80,7 @@ export function AiSuggestionsGrid({
     justificacion?: string;
   }> | null>(null);
   const [strategyExplanation, setStrategyExplanation] = useState<string | null>(null);
+  const [viaticoMenuOpen, setViaticoMenuOpen] = useState(false);
   const [undoStack, setUndoStack] = useState<GridAction[]>([]);
   const [redoStack, setRedoStack] = useState<GridAction[]>([]);
   const [focusedItemState, setFocusedItemState] = useState<EventItem | null>(null);
@@ -433,6 +434,47 @@ export function AiSuggestionsGrid({
     } catch (e) {
       console.error(e);
       alert('Error al agregar el abono.');
+    }
+  };
+
+  const handleAddViatico = async (anillo: number) => {
+    setViaticoMenuOpen(false);
+    const configs = [
+      { name: 'Viático Anillo 0 (Rancagua / Machalí / Olivar)', detalle: 'Radio urbano base (0-15 km) - Sin recargo', costo: 0, ganancia: 0 },
+      { name: 'Viático Anillo 1 (Requínoa / Mostazal / Rengo / Coya)', detalle: 'Traslado y logística intermedia (15-35 km)', costo: 20000, ganancia: 10000 },
+      { name: 'Viático Anillo 2 (San Fernando / Colchagua / Buin / Paine)', detalle: 'Traslado interurbano y peajes (35-70 km)', costo: 45000, ganancia: 20000 },
+      { name: 'Viático Anillo 3 (Stgo Oriente / Viña / Casablanca)', detalle: 'Logística de larga distancia y peajes TAG (>70 km)', costo: 65000, ganancia: 30000 },
+    ];
+
+    const viatico = configs[anillo] || configs[1];
+    const financials = calculateFinancials(viatico.costo, viatico.ganancia, 'factura', false, false);
+
+    const newItem = {
+      event_id: eventId,
+      servicio: viatico.name,
+      detalle: viatico.detalle,
+      tipo_evento: "Logística",
+      cantidad: 1,
+      costo: viatico.costo,
+      ganancia: viatico.ganancia,
+      valor_neto: financials.valorNeto,
+      iva: financials.ivaDebito,
+      valor_total: financials.valorTotal,
+      margen: financials.margen,
+      tipo_doc_costo: 'factura' as const,
+      iva_incluido: false,
+      es_insumo: false,
+      approved: false,
+    };
+
+    try {
+      const { data, error } = await (supabase.from('event_items') as any).insert(newItem).select().single();
+      if (error) throw error;
+      pushUndoAction({ type: 'ADD', item: data as EventItem });
+      if (onDraftChanged) onDraftChanged();
+    } catch (e) {
+      console.error(e);
+      alert('Error al agregar el viático geográfico.');
     }
   };
 
@@ -2245,6 +2287,57 @@ export function AiSuggestionsGrid({
                 <Banknote className="h-3.5 w-3.5" />
                 Agregar Abono
               </Button>
+              <div className="relative inline-block text-left">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setViaticoMenuOpen(prev => !prev)}
+                  className="h-8 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border-blue-200 gap-1 font-semibold shadow-xs"
+                >
+                  <MapPin className="h-3.5 w-3.5" />
+                  Viático Geográfico
+                  <ChevronDown className="h-3 w-3 ml-0.5 opacity-60" />
+                </Button>
+                {viaticoMenuOpen && (
+                  <div className="absolute right-0 mt-1 w-64 bg-popover text-popover-foreground border border-border rounded-lg shadow-xl z-50 py-1.5 text-xs animate-in fade-in-50 zoom-in-95">
+                    <div className="px-3 py-1 font-semibold text-muted-foreground uppercase tracking-wider text-[10px] border-b border-border/50">
+                      Calculadora de Viáticos
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAddViatico(0)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/70 flex flex-col transition-colors cursor-pointer"
+                    >
+                      <span className="font-semibold text-foreground">Anillo 0 ($0 Neto / $0 Total)</span>
+                      <span className="text-[11px] text-muted-foreground">Rancagua, Machalí, Olivar (0-15 km)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddViatico(1)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/70 flex flex-col transition-colors border-t border-border/40 cursor-pointer"
+                    >
+                      <span className="font-semibold text-foreground">Anillo 1 ($30.000 Neto / $35.700 Total)</span>
+                      <span className="text-[11px] text-muted-foreground">Requínoa, Mostazal, Rengo, Coya (15-35 km)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddViatico(2)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/70 flex flex-col transition-colors border-t border-border/40 cursor-pointer"
+                    >
+                      <span className="font-semibold text-foreground">Anillo 2 ($65.000 Neto / $77.350 Total)</span>
+                      <span className="text-[11px] text-muted-foreground">San Fernando, Colchagua, Buin, Paine (35-70 km)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddViatico(3)}
+                      className="w-full text-left px-3 py-2 hover:bg-muted/70 flex flex-col transition-colors border-t border-border/40 cursor-pointer"
+                    >
+                      <span className="font-semibold text-foreground">Anillo 3 ($95.000 Neto / $113.050 Total)</span>
+                      <span className="text-[11px] text-muted-foreground">Stgo Oriente, Viña del Mar, Casablanca (&gt;70 km)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
               <Button
                 size="sm"
                 variant="outline"

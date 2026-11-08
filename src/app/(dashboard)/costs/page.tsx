@@ -5,13 +5,15 @@ import { createClient } from '@/lib/supabase/client'
 import { MasterCost } from '@/types'
 import { CostsTable } from '@/components/costs/costs-table'
 import { CostFormDialog } from '@/components/costs/cost-form-dialog'
+import { StrategicPricingDialog } from '@/components/costs/strategic-pricing-dialog'
 import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { Plus, Sparkles } from 'lucide-react'
 
 export default function CostsPage() {
   const [costs, setCosts] = useState<MasterCost[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [strategicDialogOpen, setStrategicDialogOpen] = useState(false)
   const [editingCost, setEditingCost] = useState<MasterCost | null>(null)
 
   const fetchCosts = async () => {
@@ -59,10 +61,20 @@ export default function CostsPage() {
             Catálogo maestro de costos de DUO Producciones
           </p>
         </div>
-        <Button onClick={handleAdd}>
-          <Plus className="mr-2 h-4 w-4" />
-          Agregar Servicio
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setStrategicDialogOpen(true)}
+            className="gap-2 border-indigo-200 text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100 shadow-2xs font-semibold"
+          >
+            <Sparkles className="h-4 w-4 text-indigo-600" />
+            Propuesta Estratégica 2026
+          </Button>
+          <Button onClick={handleAdd}>
+            <Plus className="mr-2 h-4 w-4" />
+            Agregar Servicio
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -77,6 +89,13 @@ export default function CostsPage() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         editingCost={editingCost}
+        onSuccess={fetchCosts}
+      />
+
+      <StrategicPricingDialog
+        open={strategicDialogOpen}
+        onOpenChange={setStrategicDialogOpen}
+        currentCosts={costs}
         onSuccess={fetchCosts}
       />
     </div>
