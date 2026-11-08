@@ -715,45 +715,88 @@ export default function EventDetailPage() {
               <CardHeader className="pb-4 border-b border-border/40 bg-muted/10">
                 <CardTitle className="text-base flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-emerald-600" />
-                  Resumen Real
+                  Resumen de Flujo de Caja (Cash)
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-6 space-y-4">
-                <div className="flex justify-between items-end border-b border-border/40 pb-3">
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Presupuestado</p>
-                    <p className="text-sm font-semibold text-foreground mt-1">
-                      ${items.reduce((acc, item) => acc + (item.valor_total || 0), 0).toLocaleString('es-CL')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex justify-between items-end border-b border-border/40 pb-3">
-                  <div>
-                    <p className="text-xs font-medium text-emerald-600/80 uppercase tracking-wider">Abonos Recibidos</p>
-                    <p className="text-sm font-semibold text-emerald-600 mt-1">
-                      ${transactions.filter(t => t.tipo_evento === 'ABONO_CLIENTE').reduce((acc, t) => acc + (t.valor_total || 0), 0).toLocaleString('es-CL')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex justify-between items-end border-b border-border/40 pb-3">
-                  <div>
-                    <p className="text-xs font-medium text-rose-600/80 uppercase tracking-wider">Gastos Reales</p>
-                    <p className="text-sm font-semibold text-rose-600 mt-1">
-                      ${transactions.filter(t => t.tipo_evento === 'GASTO_REAL').reduce((acc, t) => acc + (t.valor_total || 0), 0).toLocaleString('es-CL')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex justify-between items-end pt-1">
-                  <div>
-                    <p className="text-xs font-bold text-foreground uppercase tracking-wider">Saldo por Cobrar</p>
-                    <p className="text-xl font-bold text-foreground mt-1">
-                      ${(
-                        items.reduce((acc, item) => acc + (item.valor_total || 0), 0) -
-                        transactions.filter(t => t.tipo_evento === 'ABONO_CLIENTE').reduce((acc, t) => acc + (t.valor_total || 0), 0)
-                      ).toLocaleString('es-CL')}
-                    </p>
-                  </div>
-                </div>
+                {(() => {
+                  const totalPresupuestado = items.reduce((acc, item) => acc + (item.valor_total || 0), 0);
+                  const costoTotalItems = items.reduce((acc, item) => acc + ((item.costo || 0) * (item.cantidad || 1)), 0);
+                  const cashProyectado = totalPresupuestado - costoTotalItems;
+                  const abonosRecibidos = transactions.filter(t => t.tipo_evento === 'ABONO_CLIENTE').reduce((acc, t) => acc + (t.valor_total || 0), 0);
+                  const gastosReales = transactions.filter(t => t.tipo_evento === 'GASTO_REAL').reduce((acc, t) => acc + (t.valor_total || 0), 0);
+                  const cashActualMano = abonosRecibidos - gastosReales;
+                  const saldoPorCobrar = totalPresupuestado - abonosRecibidos;
+
+                  return (
+                    <>
+                      <div className="flex justify-between items-end border-b border-border/40 pb-3">
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Presupuestado</p>
+                          <p className="text-sm font-semibold text-foreground mt-1">
+                            ${totalPresupuestado.toLocaleString('es-CL')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Costo Insumos/Servicios</p>
+                          <p className="text-sm font-semibold text-red-600 mt-1">
+                            -${costoTotalItems.toLocaleString('es-CL')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-900/40">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">
+                              💵 Cash en Mano Proyectado
+                            </p>
+                            <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300">
+                              Ganancia inmediata al terminar evento
+                            </p>
+                          </div>
+                          <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">
+                            ${cashProyectado.toLocaleString('es-CL')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-end border-b border-border/40 pb-3">
+                        <div>
+                          <p className="text-xs font-medium text-emerald-600/80 uppercase tracking-wider">Abonos Recibidos</p>
+                          <p className="text-sm font-semibold text-emerald-600 mt-1">
+                            +${abonosRecibidos.toLocaleString('es-CL')}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-medium text-rose-600/80 uppercase tracking-wider">Gastos Reales Pagados</p>
+                          <p className="text-sm font-semibold text-rose-600 mt-1">
+                            -${gastosReales.toLocaleString('es-CL')}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center border-b border-border/40 pb-3">
+                        <div>
+                          <p className="text-xs font-bold text-foreground uppercase tracking-wider">Cash Actual en Cuenta/Caja</p>
+                          <p className="text-[11px] text-muted-foreground">Abonos recaudados menos gastos pagados</p>
+                        </div>
+                        <p className={`text-base font-bold ${cashActualMano >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          ${cashActualMano.toLocaleString('es-CL')}
+                        </p>
+                      </div>
+
+                      <div className="flex justify-between items-end pt-1">
+                        <div>
+                          <p className="text-xs font-bold text-foreground uppercase tracking-wider">Saldo por Cobrar</p>
+                          <p className="text-xl font-bold text-foreground mt-1">
+                            ${saldoPorCobrar.toLocaleString('es-CL')}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>

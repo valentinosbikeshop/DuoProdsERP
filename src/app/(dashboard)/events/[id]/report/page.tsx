@@ -62,7 +62,8 @@ export default function ReportPage({ params }: { params: { id: string } }) {
 
   if (!event) return <div>Evento no encontrado.</div>;
 
-  let totalCostos = 0;
+  let totalCostosReales = 0;
+  let totalCostosNetos = 0;
   let totalGanancia = 0;
   let ivaDebito = 0;
   let ivaCredito = 0;
@@ -71,6 +72,7 @@ export default function ReportPage({ params }: { params: { id: string } }) {
   items.forEach(item => {
     const qty = item.cantidad || 1;
     const rawCostoTotal = (item.costo || 0) * qty;
+    totalCostosReales += rawCostoTotal;
     totalGanancia += (item.ganancia || 0) * qty;
     
     // IVA Débito (Ventas al cliente)
@@ -79,18 +81,20 @@ export default function ReportPage({ params }: { params: { id: string } }) {
     // Costos e IVA Crédito según tipo de documento
     if (item.tipo_doc_costo === 'factura') {
       const netCosto = Math.round((item.costo || 0) / 1.19) * qty;
-      totalCostos += netCosto;
+      totalCostosNetos += netCosto;
       ivaCredito += (rawCostoTotal - netCosto);
     } else {
-      totalCostos += rawCostoTotal;
+      totalCostosNetos += rawCostoTotal;
     }
     
     totalFacturado += (item.valor_total || 0) * qty;
   });
 
-  const ivaAPagar = ivaDebito - ivaCredito;
-  const utilidadNetaReal = totalGanancia; // Assuming total ganancia is the actual net profit before income tax
-  const rentabilidad = totalCostos > 0 ? (totalGanancia / totalCostos) * 100 : 0;
+  const cashInmediato = totalFacturado - totalCostosReales;
+  const ivaAPagar = Math.max(0, ivaDebito - ivaCredito);
+  const remanenteIva = Math.max(0, ivaCredito - ivaDebito);
+  const utilidadNetaReal = cashInmediato - ivaAPagar;
+  const rentabilidad = totalCostosReales > 0 ? (utilidadNetaReal / totalCostosReales) * 100 : 0;
 
   return (
     <div className="space-y-6">
@@ -107,14 +111,14 @@ export default function ReportPage({ params }: { params: { id: string } }) {
         <PdfGenerator event={event} items={items} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Flujo de Salida (Costos)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-500">{formatCLP(totalCostos)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Costo base de proveedores</p>
+            <div className="text-2xl font-bold text-red-500">{formatCLP(totalCostosReales)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total desembolsado a proveedores</p>
           </CardContent>
         </Card>
         <Card>
@@ -123,37 +127,46 @@ export default function ReportPage({ params }: { params: { id: string } }) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-500">{formatCLP(totalFacturado)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Total cobrado al cliente (Costo + Ganancia + IVA)</p>
+            <p className="text-xs text-muted-foreground mt-1">Total cobrado al cliente (bruto)</p>
           </CardContent>
         </Card>
-        <Card className="bg-emerald-50 border-emerald-200">
+        <Card className="bg-emerald-500/10 border-emerald-300 dark:border-emerald-800">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-emerald-700">Utilidad Neta (Ganancia Libre)</CardTitle>
+            <CardTitle className="text-sm font-bold text-emerald-800 dark:text-emerald-300">💵 Cash en Mano (Inmediato)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-emerald-600">{formatCLP(utilidadNetaReal)}</div>
-            <p className="text-xs text-emerald-600/80 mt-1">Margen global: {formatPercentage(rentabilidad)}</p>
+            <div className="text-2xl font-black text-emerald-700 dark:text-emerald-400">{formatCLP(cashInmediato)}</div>
+            <p className="text-xs text-emerald-700/80 dark:text-emerald-300 mt-1">Dinero líquido terminando el evento</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground">Resumen Tributario (IVA)</CardTitle>
+            <CardTitle className="text-sm text-muted-foreground">Resumen Tributario (IVA F29)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">IVA Débito (Ventas):</span>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">IVA Débito:</span>
               <span className="font-medium text-orange-600">{formatCLP(ivaDebito)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">IVA Crédito (Compras):</span>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">IVA Crédito:</span>
               <span className="font-medium text-green-600">-{formatCLP(ivaCredito)}</span>
             </div>
-            <div className="flex justify-between text-sm font-bold pt-1 border-t mt-1">
-              <span>IVA a Pagar (SII):</span>
-              <span className={ivaAPagar > 0 ? "text-red-600" : "text-green-600"}>
-                {formatCLP(ivaAPagar)}
+            <div className="flex justify-between text-xs font-bold pt-1 border-t mt-1">
+              <span>A Pagar SII:</span>
+              <span className={ivaAPagar > 0 ? "text-amber-600" : "text-green-600"}>
+                {ivaAPagar > 0 ? formatCLP(ivaAPagar) : `${formatCLP(remanenteIva)} (a favor)`}
               </span>
             </div>
+          </CardContent>
+        </Card>
+        <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-blue-800 dark:text-blue-300">Ganancia Real Limpia</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">{formatCLP(utilidadNetaReal)}</div>
+            <p className="text-xs text-blue-600/80 mt-1">Margen real: {formatPercentage(rentabilidad)}</p>
           </CardContent>
         </Card>
       </div>

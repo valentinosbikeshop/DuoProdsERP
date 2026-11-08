@@ -125,15 +125,21 @@ export function PdfGenerator({ event, items }: { event: Event; items: EventItem[
       doc.text('Resumen Financiero', 120, y);
       y += 6;
       doc.setFont('helvetica', 'normal');
-      doc.text(`Total Costos Operativos: ${formatCLP(totalCostos)}`, 120, y); y += 6;
-      doc.text(`Total Ganancia: ${formatCLP(totalGanancia)}`, 120, y); y += 6;
+      doc.text(`Total Costos Desembolsados: ${formatCLP(totalCostos)}`, 120, y); y += 6;
       doc.text(`Total Facturación Neta: ${formatCLP(totalNeto)}`, 120, y); y += 6;
-      doc.text(`Total IVA: ${formatCLP(totalIva)}`, 120, y); y += 6;
+      doc.text(`Total IVA Facturado: ${formatCLP(totalIva)}`, 120, y); y += 6;
       doc.setFont('helvetica', 'bold');
-      doc.text(`Total Facturado: ${formatCLP(totalFacturado)}`, 120, y); y += 6;
+      doc.text(`Total Cobrado Cliente: ${formatCLP(totalFacturado)}`, 120, y); y += 6;
+      
+      const cashInmediato = totalFacturado - totalCostos;
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Cash en Mano Inmediato: ${formatCLP(cashInmediato)}`, 120, y); y += 6;
+
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Ganancia Neta Limpia: ${formatCLP(totalGanancia)}`, 120, y); y += 6;
       
       const rentabilidad = totalCostos > 0 ? (totalGanancia / totalCostos) * 100 : 0;
-      doc.text(`Rentabilidad Neta: ${formatPercentage(rentabilidad)}`, 120, y);
+      doc.text(`Rentabilidad Real: ${formatPercentage(rentabilidad)}`, 120, y);
 
       // Footer
       doc.setFont('helvetica', 'italic');
