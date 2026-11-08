@@ -365,6 +365,11 @@ export default function EventDetailPage() {
           <TabsTrigger value="draft" className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
             <Sparkles className="h-4 w-4" />
             Borrador de Costos
+            {draftItems.length > 0 && (
+              <Badge variant="secondary" className="px-1.5 py-0.5 text-[10px] ml-1 bg-amber-500/10 text-amber-600 border-0">
+                {draftItems.length}
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="items" className="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
             <CheckCircle className="h-4 w-4" />

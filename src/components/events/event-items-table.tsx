@@ -6,7 +6,7 @@ import { formatCLP, formatPercentage, calculateFinancials, calculateGananciaFrom
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine, Split, GitFork, X, Sparkles, GripVertical } from 'lucide-react';
+import { Trash2, Loader2, FileUp, ExternalLink, ChevronDown, ChevronRight, Combine, Split, GitFork, X, Sparkles, GripVertical, Undo2 } from 'lucide-react';
 import { useDragAutoScroll } from '@/hooks/use-drag-auto-scroll';
 import { ConsolidateDialog } from './consolidate-dialog';
 import { DistributeInsumoDialog } from './distribute-insumo-dialog';
@@ -30,6 +30,9 @@ interface EventItemsTableProps {
 
 export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, hasRetailSales = false }: EventItemsTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [returningId, setReturningId] = useState<string | null>(null);
+  const [returningMultiple, setReturningMultiple] = useState(false);
+  const [returningAll, setReturningAll] = useState(false);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [consolidationName, setConsolidationName] = useState('');
@@ -94,6 +97,85 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
       if (onItemDeleted) onItemDeleted(); // Refresh parent items to update FloatingFinancialAdvisor
     } catch (e) {
       console.error('Error updating quantity:', e);
+    }
+  };
+
+  const handleReturnToDraft = async (id: string) => {
+    setReturningId(id);
+    try {
+      const childrenIds = localItems.filter(s => s.parent_id === id).map(s => s.id);
+      const idsToReturn = [id, ...childrenIds];
+
+      const { error } = await (supabase.from('event_items') as any)
+        .update({ approved: false })
+        .in('id', idsToReturn);
+
+      if (error) throw error;
+
+      setSelectedIds(prev => prev.filter(selId => !idsToReturn.includes(selId)));
+      if (onItemDeleted) onItemDeleted();
+    } catch (error: any) {
+      console.error('Error returning item to draft:', error);
+      alert('Error al devolver el ítem a borradores: ' + (error.message || 'Error desconocido'));
+    } finally {
+      setReturningId(null);
+    }
+  };
+
+  const handleReturnSelectedToDraft = async () => {
+    if (selectedIds.length === 0) return;
+    const confirm = window.confirm(`¿Devolver ${selectedIds.length} ítem(s) seleccionados al borrador de costos?`);
+    if (!confirm) return;
+
+    setReturningMultiple(true);
+    try {
+      const allIdsToReturn: string[] = [...selectedIds];
+      selectedIds.forEach(selId => {
+        const children = localItems.filter(s => s.parent_id === selId).map(s => s.id);
+        children.forEach(cId => {
+          if (!allIdsToReturn.includes(cId)) {
+            allIdsToReturn.push(cId);
+          }
+        });
+      });
+
+      const { error } = await (supabase.from('event_items') as any)
+        .update({ approved: false })
+        .in('id', allIdsToReturn);
+
+      if (error) throw error;
+
+      setSelectedIds([]);
+      if (onItemDeleted) onItemDeleted();
+    } catch (error: any) {
+      console.error('Error returning selected items to draft:', error);
+      alert('Error al devolver ítems seleccionados a borradores: ' + (error.message || 'Error desconocido'));
+    } finally {
+      setReturningMultiple(false);
+    }
+  };
+
+  const handleReturnAllToDraft = async () => {
+    if (localItems.length === 0) return;
+    const confirm = window.confirm('¿Estás seguro de que deseas devolver TODOS los ítems del presupuesto oficial al borrador de costos?');
+    if (!confirm) return;
+
+    setReturningAll(true);
+    try {
+      const allIds = localItems.map(item => item.id);
+      const { error } = await (supabase.from('event_items') as any)
+        .update({ approved: false })
+        .in('id', allIds);
+
+      if (error) throw error;
+
+      setSelectedIds([]);
+      if (onItemDeleted) onItemDeleted();
+    } catch (error: any) {
+      console.error('Error returning all items to draft:', error);
+      alert('Error al devolver todos los ítems a borradores: ' + (error.message || 'Error desconocido'));
+    } finally {
+      setReturningAll(false);
     }
   };
 
@@ -689,7 +771,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
       >
         {!isCompleted ? (
           <TableCell className="w-[50px] text-center p-2">
-            {!isChild && (
+            {!isChild ? (
               <div className="flex items-center justify-center gap-1">
                 <span 
                   className="cursor-grab active:cursor-grabbing p-0.5 text-muted-foreground/40 hover:text-foreground transition-colors rounded hover:bg-muted/60"
@@ -702,6 +784,15 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
                   checked={isSelected} 
                   onChange={() => toggleSelect(item.id!)}
                   className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-center">
+                <input 
+                  type="checkbox" 
+                  checked={isSelected} 
+                  onChange={() => toggleSelect(item.id!)}
+                  className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
                 />
               </div>
             )}
@@ -871,39 +962,113 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
         </TableCell>
         {!isCompleted && (
           <TableCell className="p-2 text-center">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => handleDelete(item.id)}
-              disabled={deletingId === item.id}
-              title={isChild ? "Eliminar insumo" : "Eliminar ítem"}
-            >
-              {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            </Button>
+            <div className="flex items-center justify-center gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                onClick={() => handleReturnToDraft(item.id!)}
+                disabled={returningId === item.id || deletingId === item.id}
+                title={isChild ? "Devolver insumo a borradores" : "Devolver a borradores"}
+              >
+                {returningId === item.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+                ) : (
+                  <Undo2 className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => handleDelete(item.id)}
+                disabled={deletingId === item.id || returningId === item.id}
+                title={isChild ? "Eliminar insumo" : "Eliminar ítem"}
+              >
+                {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </Button>
+            </div>
           </TableCell>
         )}
       </TableRow>
     );
   };
 
+  const allSelectableIds = localItems.map(i => i.id!);
+  const allSelected = allSelectableIds.length > 0 && allSelectableIds.every(id => selectedIds.includes(id));
+  const someSelected = selectedIds.length > 0;
+
+  const handleToggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(allSelectableIds);
+    }
+  };
+
   return (
     <div className="space-y-3">
-      {!isCompleted && hasRetailSales && selectedIds.length >= 2 && (
-        <div className="flex justify-end">
-          <Button
-            size="sm"
-            onClick={handleConsolidateClick}
-            className="h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs animate-in fade-in zoom-in"
-          >
-            <Combine className="h-3.5 w-3.5" />
-            Consolidar {selectedIds.length} ítems
-          </Button>
+      {!isCompleted && (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/30 border rounded-lg">
+          <div className="flex flex-wrap items-center gap-2">
+            {someSelected ? (
+              <>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                  {selectedIds.length} seleccionado(s)
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleReturnSelectedToDraft}
+                  disabled={returningMultiple}
+                  className="h-8 text-xs gap-1.5 border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-700 font-medium shadow-xs"
+                >
+                  {returningMultiple ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" /> : <Undo2 className="h-3.5 w-3.5 text-amber-600" />}
+                  Devolver selección a Borradores ({selectedIds.length})
+                </Button>
+                {hasRetailSales && selectedIds.length >= 2 && (
+                  <Button
+                    size="sm"
+                    onClick={handleConsolidateClick}
+                    className="h-8 text-xs gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs animate-in fade-in zoom-in"
+                  >
+                    <Combine className="h-3.5 w-3.5" />
+                    Consolidar ({selectedIds.length})
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSelectedIds([])}
+                  className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Deseleccionar
+                </Button>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                💡 Marca las casillas para devolver ítems seleccionados o usa el botón para devolver todo a borradores.
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleReturnAllToDraft}
+              disabled={returningAll || localItems.length === 0}
+              className="h-8 text-xs gap-1.5 border-amber-300 text-amber-800 bg-amber-50/70 hover:bg-amber-100 dark:bg-amber-950/20 dark:text-amber-300 dark:border-amber-800 font-medium shadow-xs"
+            >
+              {returningAll ? <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" /> : <Undo2 className="h-3.5 w-3.5 text-amber-600" />}
+              Devolver Todo a Borradores
+            </Button>
+          </div>
         </div>
       )}
       
       <div className="border rounded-md overflow-x-auto shadow-xs bg-card custom-scrollbar">
-        <Table className="min-w-[1350px]">
+        <Table className="min-w-[1380px]">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-0">
               <TableHead colSpan={5} className="text-center font-bold text-muted-foreground border-r">INFORMACIÓN DEL ÍTEM</TableHead>
@@ -912,7 +1077,17 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
               <TableHead colSpan={isCompleted ? 2 : 3} className="text-center font-bold text-muted-foreground">RESUMEN Y GESTIÓN</TableHead>
             </TableRow>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-[40px]"></TableHead>
+              <TableHead className="w-[50px] text-center p-2">
+                {!isCompleted && (
+                  <input 
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={handleToggleSelectAll}
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    title={allSelected ? "Deseleccionar todos" : "Seleccionar todos"}
+                  />
+                )}
+              </TableHead>
               <TableHead className="min-w-[280px] text-xs font-bold uppercase tracking-wider">Servicio</TableHead>
               <TableHead className="min-w-[180px] text-xs font-bold uppercase tracking-wider">Detalle</TableHead>
               <TableHead className="w-[100px] text-xs font-bold uppercase tracking-wider">Tipo</TableHead>
@@ -931,7 +1106,7 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
               
               <TableHead className="w-[80px] text-xs font-bold uppercase tracking-wider text-center">Margen</TableHead>
               <TableHead className="w-[90px] text-center text-xs font-bold uppercase tracking-wider">Documento</TableHead>
-              {!isCompleted && <TableHead className="w-[80px] text-center text-xs font-bold uppercase tracking-wider">Acciones</TableHead>}
+              {!isCompleted && <TableHead className="w-[100px] text-center text-xs font-bold uppercase tracking-wider">Acciones</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
