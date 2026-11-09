@@ -37,7 +37,7 @@ import {
   ChevronDown, 
   ChevronUp,
   Search,
-  Building
+  Scale
 } from 'lucide-react';
 
 interface StrategicPricingDialogProps {
@@ -58,32 +58,40 @@ export interface ProposalItem {
   // Régimen Tributario
   tipo_doc: 'boleta' | 'factura';
 
-  // Costos Proveedor & Empresa
-  liquidoProveedor: number;      // "En mano" que pide el músico/proveedor
-  retencionSII: number;          // 15.25% retenido que DUO entera al SII en F29
-  costoBrutoTotal: number;       // Desembolso real para DUO (Líquido + Retención)
-  costoAnterior: number;         // Costo anterior en ERP sin retención
-  difCosto: number;              // Variación de costo para la empresa
+  // Costos Proveedor & Empresa (Modelo 50/50 CEO)
+  liquidoProveedor: number;          // Lo que recibe el contratado "en mano" tras su 7.625%
+  aporteRetencionDUO: number;       // 7.625% asumido por DUO Producciones
+  aporteRetencionProveedor: number; // 7.625% asumido por el contratado en su boleta
+  retencionSII: number;              // 15.25% legal total que DUO entera al SII en F29
+  costoBrutoTotal: number;           // Desembolso real para DUO (Base + 7.625%)
+  costoAnterior: number;             // Costo anterior en ERP
+  difCosto: number;                  // Variación de costo para DUO (+7.625%)
 
   // Precios Venta Cliente
-  netoAnterior: number;          // Lo que DUO cobraba antes al cliente
-  netoSugerido: number;          // Nuevo valor de venta neto recomendado
-  totalClienteIva: number;       // netoSugerido * 1.19 (con IVA)
+  netoAnterior: number;              // Lo que DUO cobraba antes al cliente
+  netoSugerido: number;              // Nuevo valor de venta neto recomendado
+  totalClienteIva: number;           // netoSugerido * 1.19 (con IVA)
 
   // Rentabilidad Real
-  gananciaNeta: number;          // netoSugerido - costoBrutoTotal
-  margenRentabilidad: number;    // (gananciaNeta / costoBrutoTotal) * 100
+  gananciaNeta: number;              // netoSugerido - costoBrutoTotal
+  margenRentabilidad: number;        // (gananciaNeta / costoBrutoTotal) * 100
 
   // Justificación detallada
-  justificacion: string;         // Por qué se modificó y qué riesgos mitiga
-  benchmarkCompetencia: string;  // Comparativa con mercado chileno (Trémolo, etc.)
+  justificacion: string;             // Explicación técnica y comercial
+  benchmarkCompetencia: string;      // Comparativa con mercado chileno (Trémolo, etc.)
 }
 
-// Tasa legal de retención de Boletas de Honorarios para el año comercial 2026 (Ley N° 21.133)
-const RETENCION_HONORARIOS_2026 = 0.1525;
+// Tasa legal de retención de Boletas de Honorarios año comercial 2026 (Ley N° 21.133)
+const RETENCION_TOTAL_2026 = 0.1525; // 15.25%
+// Directiva de la CEO: Reparto 50/50 del impacto tributario
+const TASA_REPARTO_50_50 = 0.07625; // 7.625% para cada parte
 
-// Cálculo: Bruto = Líquido / (1 - 0.1525)
-const calcularBrutoBoleta = (liquido: number) => Math.round(liquido / (1 - RETENCION_HONORARIOS_2026));
+// 1. Costo Bruto Empresa: DUO asume un recargo del +7.625% sobre la tarifa base histórica
+const calcularBruto5050 = (baseHistorica: number) => Math.round(baseHistorica * (1 + TASA_REPARTO_50_50));
+// 2. Retención total legal 15.25% que se entera al SII en F29
+const calcularRetencionSII = (bruto: number) => Math.round(bruto * RETENCION_TOTAL_2026);
+// 3. Líquido que percibe en mano el contratado (asume su 7.625%)
+const calcularLiquido5050 = (bruto: number) => bruto - calcularRetencionSII(bruto);
 
 export function StrategicPricingDialog({
   open,
@@ -99,14 +107,14 @@ export function StrategicPricingDialog({
   const [showExplanation, setShowExplanation] = useState(true);
   const supabase = createClient();
 
-  // Inicializar propuestas detalladas post-auditoría estratégica
+  // Inicializar propuestas detalladas con el modelo 50/50 de la CEO
   React.useEffect(() => {
     if (open && !initialized && currentCosts.length > 0) {
       const items: ProposalItem[] = currentCosts.map((c) => {
         const servLower = c.servicio.toLowerCase();
         
         let tipo_doc: 'boleta' | 'factura' = 'boleta';
-        let liquido = c.costo;
+        let baseHistorica = c.costo;
         let costoBruto = c.costo;
         let netoSugerido = c.valor_neto;
         let justificacion = 'Servicio sin ajustes mayores de benchmark.';
@@ -115,113 +123,116 @@ export function StrategicPricingDialog({
         // 1. SOLISTA (Violín / Cello / Saxo)
         if (servLower === 'solista') {
           tipo_doc = 'boleta';
-          liquido = 70000;
-          costoBruto = calcularBrutoBoleta(liquido); // $82.596
+          baseHistorica = 70000;
+          costoBruto = calcularBruto5050(baseHistorica); // $75.338 (+7,625% DUO)
           netoSugerido = 160000;
-          justificacion = 'Antes DUO pagaba $70.000 y absorbía la retención del 15,25% de su propio margen. Al calibrar el neto a $160.000, la productora absorbe el costo real de $82.596 y obtiene $77.404 de ganancia neta protegida.';
-          benchmarkCompetencia = 'Grupo Trémolo y productoras de Santiago cotizan solistas entre $180.000 y $220.000 neto. DUO cobraba $140.000 quedando 30% por debajo.';
+          justificacion = 'Directiva CEO 50/50: DUO aporta +$5.338 (7,625%) y el músico asume -$6.151 de retención en su líquido ($63.849 en mano). DUO entera $11.489 al SII en F29. Al cotizar a $160.000 neto, la productora percibe $84.662 de ganancia limpia.';
+          benchmarkCompetencia = 'Grupo Trémolo y productoras de Santiago cotizan solistas entre $180.000 y $220.000 neto.';
         
         // 2. DÚO (Violín & Chelo)
         } else if (servLower === 'duo' || servLower === 'dúo') {
           tipo_doc = 'boleta';
-          liquido = 100000; // $50k líquido para cada músico
-          costoBruto = calcularBrutoBoleta(liquido); // $117.994
+          baseHistorica = 100000; // $50k base c/u
+          costoBruto = calcularBruto5050(baseHistorica); // $107.625 (+7,625% DUO)
           netoSugerido = 235000;
-          justificacion = 'Dos músicos profesionales de conservatorio ($50.000 en mano c/u). DUO debe enterar $17.994 al SII en F29. Al cobrar $235.000 neto al cliente, se asegura una utilidad limpia de $117.006 (margen del 99,2%).';
-          benchmarkCompetencia = 'Dúos de cuerdas similares en la Región Metropolitana y O’Higgins cotizan entre $280.000 y $340.000 neto. Con $235.000, DUO se mantiene altamente atractiva.';
+          justificacion = 'Directiva CEO 50/50: Retención dividida en partes iguales. DUO asume un recargo de +$7.625 (costo bruto $107.625) y los músicos reciben $91.212 en mano ($45.606 c/u). Se declara $16.413 al SII. Venta de $235.000 neto asegura $127.375 de utilidad.';
+          benchmarkCompetencia = 'Dúos de cuerdas similares en la Zona Central cotizan entre $280.000 y $340.000 neto.';
         
         // 3. TRÍO DE CÁMARA
         } else if (servLower === 'trío' || servLower === 'trio') {
           tipo_doc = 'boleta';
-          liquido = 150000; // $50k c/u x 3
-          costoBruto = calcularBrutoBoleta(liquido); // $176.991
+          baseHistorica = 150000; // $50k base c/u x 3
+          costoBruto = calcularBruto5050(baseHistorica); // $161.438 (+7,625% DUO)
           netoSugerido = 330000;
-          justificacion = 'Tres instrumentistas ($50.000 líquidos c/u). Retención legal de $26.991. Se fija la venta en $330.000 neto para garantizar $153.009 de ganancia pura.';
+          justificacion = 'Directiva CEO 50/50: DUO aporta +$11.438 y los 3 músicos aportan $13.181 de la retención total ($136.819 en mano). Retención total de $24.619. Venta de $330.000 neto consolida $168.562 de utilidad.';
           benchmarkCompetencia = 'Benchmark de mercado en eventos corporativos y bodas: $380.000 a $440.000 neto.';
         
         // 4. SEXTETO FIAMMA
         } else if (servLower.includes('sexteto fiamma')) {
           tipo_doc = 'boleta';
-          liquido = 480000; // Convenio agencia preferente ($80.000 x 6)
-          costoBruto = calcularBrutoBoleta(liquido); // $566.372
+          baseHistorica = 480000; // Convenio preferente
+          costoBruto = calcularBruto5050(baseHistorica); // $516.600 (+7,625% DUO)
           netoSugerido = 890000;
-          justificacion = 'Elenco de cámara de 6 músicos. DUO debe tributar $86.372 por retención. Se incrementa el valor de $800.000 a $890.000 neto, protegiendo $323.628 de margen neto para la productora.';
+          justificacion = 'Directiva CEO 50/50: Reparto equitativo con el elenco. DUO ahorra $49.772 en costos tributarios frente al modelo 100% empresa, desembolsando $516.600. El elenco recibe $437.818 en mano. Ganancia neta para DUO de $373.400.';
           benchmarkCompetencia = 'Sextetos clásicos de gala en Santiago cotizan entre $1.100.000 y $1.400.000 neto.';
 
         // 5. ORQUESTA FIAMMA
         } else if (servLower.includes('orquesta fiamma')) {
           tipo_doc = 'boleta';
-          liquido = 960000; // 12 músicos en escena
-          costoBruto = calcularBrutoBoleta(liquido); // $1.132.743
+          baseHistorica = 960000; // 12 músicos en escena
+          costoBruto = calcularBruto5050(baseHistorica); // $1.033.200 (+7,625% DUO)
           netoSugerido = 1850000;
-          justificacion = 'Producción orquestal de alto impacto con 12 músicos. La retención de $172.743 se traslada al precio de venta, asegurando una utilidad histórica récord de $717.257 para la empresa.';
+          justificacion = 'Directiva CEO 50/50: DUO asume +$73.200 (desembolso bruto $1.033.200) y los 12 músicos asumen $84.363 de retención ($875.637 en mano). Retención F29 de $157.563. Ganancia neta récord de $816.800 para la productora.';
           benchmarkCompetencia = 'Orquestas de cámara completas para galas corporativas cotizan sobre $2.400.000 neto.';
 
         // 6. CANCIONES ESPECIALES / ARREGLOS
         } else if (servLower.includes('canciones especiales')) {
           tipo_doc = 'boleta';
-          liquido = 10000;
-          costoBruto = calcularBrutoBoleta(liquido); // $11.800
+          baseHistorica = 10000;
+          costoBruto = calcularBruto5050(baseHistorica); // $10.763 (+7,625% DUO)
           netoSugerido = 35000;
-          justificacion = 'Arreglo musical a medida adaptado para la dotación instrumental. Costo del arreglador $11.800 bruto. Margen de 196% ($23.200 de ganancia neta).';
-          benchmarkCompetencia = 'Arreglos personalizados en productoras de eventos se cobran entre $40.000 y $60.000.';
+          justificacion = 'Directiva CEO 50/50: Arreglo musical con costo empresa de $10.763 y líquido de $9.122. Margen de 225% ($24.237 de utilidad limpia).';
+          benchmarkCompetencia = 'Arreglos a medida se cobran entre $40.000 y $60.000.';
 
         // 7. ANIMADOR DE EVENTOS
         } else if (servLower.includes('animador')) {
           tipo_doc = 'boleta';
-          liquido = 70000; // 4 horas
-          costoBruto = calcularBrutoBoleta(liquido); // $82.596
+          baseHistorica = 70000;
+          costoBruto = calcularBruto5050(baseHistorica); // $75.338 (+7,625% DUO)
           netoSugerido = 175000;
-          justificacion = 'Locutor/animador profesional por bloque de 4 horas. Con Boleta de Honorarios 15,25%, el costo real es $82.596. Se cobra $175.000 neto obteniendo $92.404 de margen limpio.';
+          justificacion = 'Directiva CEO 50/50: 7,625% asumido por DUO ($75.338 bruto) y 7,625% por el locutor ($63.849 en mano). Retención de $11.489. Ganancia neta de $99.662 para la empresa.';
           benchmarkCompetencia = 'Animación corporativa y matrimonios en O’Higgins cotiza entre $180.000 y $260.000 neto.';
 
         // 8. AMPLIFICACIÓN / REFUERZO SONORO (GESTSER)
         } else if (servLower.includes('amplificación') || servLower.includes('gestser')) {
           tipo_doc = 'factura';
-          liquido = 50000;
-          costoBruto = 50000;
+          baseHistorica = 50000;
+          costoBruto = 50000; // Factura sin retención de honorarios
           netoSugerido = 95000;
-          justificacion = 'Refuerzo sonoro profesional con Factura (genera IVA Crédito Fiscal que neutraliza el IVA Débito de la venta). Ganancia neta de $45.000.';
+          justificacion = 'Factura comercial: Genera IVA Crédito Fiscal. No aplica retención de honorarios. Ganancia neta de $45.000.';
           benchmarkCompetencia = 'Sonido básico para ceremonia/cóctel en la industria: $100.000 a $130.000 neto.';
 
         // 9. FOTOGRAFÍA CORPORATIVA 25 A 50 FOTOS (RODRIGO ABARCA)
         } else if (c.tiempo_detalle?.includes('25 a 50 fotos') || (servLower.includes('fotografía') && c.costo === 65000)) {
           tipo_doc = 'factura';
-          liquido = 65000;
-          costoBruto = 65000; // REGLA INMUTABLE: Mantenido en $65.000 según directiva del usuario
+          baseHistorica = 65000;
+          costoBruto = 65000; // REGLA INMUTABLE: Mantenido en $65.000
           netoSugerido = 95000;
-          justificacion = 'Costo oficial pactado de $65.000 con Rodrigo Abarca MANTENIDO FIRME según su instrucción. Se actualiza el neto de venta de $90.000 a $95.000 para una ganancia de $30.000.';
-          benchmarkCompetencia = 'Sesión fotográfica corporativa express de 25-50 fotos promediada en $110.000 neto.';
+          justificacion = 'Costo oficial pactado de $65.000 con Rodrigo Abarca MANTENIDO FIRME según su instrucción. Factura comercial sin retención de boleta. Venta a $95.000 neto ($30.000 ganancia).';
+          benchmarkCompetencia = 'Sesión fotográfica corporativa express promediada en $110.000 neto.';
 
         // 10. FOTOGRAFÍA BODA COMPLETA (CEREMONIA A FIESTA)
         } else if (c.tiempo_detalle?.includes('ceremonia hasta el final') || (servLower.includes('fotografía') && c.costo === 300000)) {
           tipo_doc = 'boleta';
-          liquido = 300000;
-          costoBruto = calcularBrutoBoleta(liquido); // $353.982
+          baseHistorica = 300000;
+          costoBruto = calcularBruto5050(baseHistorica); // $322.875 (+7,625% DUO)
           netoSugerido = 560000;
-          justificacion = 'Cobertura fotográfica extensa (8 a 10 horas). El fotógrafo recibe $300.000 líquidos y DUO entera $53.982 en retención. Al fijar el neto en $560.000, la productora percibe $206.018 de margen limpio.';
+          justificacion = 'Directiva CEO 50/50: DUO aporta +$22.875 y el fotógrafo asume -$26.363 de retención ($273.637 en mano). Retención F29 de $49.238. Ganancia neta para DUO de $237.125.';
           benchmarkCompetencia = 'Fotógrafos de bodas en la Zona Central cotizan entre $650.000 y $890.000 neto.';
 
         // 11. FOTOGRAFÍA BODA FULL DAY (PREPARACIÓN A FIESTA)
         } else if (c.tiempo_detalle?.includes('preparación de los novios') || (servLower.includes('fotografía') && c.costo === 350000)) {
           tipo_doc = 'boleta';
-          liquido = 350000;
-          costoBruto = calcularBrutoBoleta(liquido); // $412.979
+          baseHistorica = 350000;
+          costoBruto = calcularBruto5050(baseHistorica); // $376.688 (+7,625% DUO)
           netoSugerido = 690000;
-          justificacion = 'Servicio premium de 12 a 14 horas con preparación de novios y fiesta. Retención de $62.979. Al cotizar en $690.000 neto, se genera una utilidad de $277.021 para DUO.';
-          benchmarkCompetencia = 'Full day de bodas con galería web y edición premium: $850.000 a $1.200.000 neto.';
+          justificacion = 'Directiva CEO 50/50: Cobertura integral 12-14 hrs. Costo bruto DUO de $376.688 y líquido de $319.243. Retención de $57.445. Utilidad neta limpia de $313.312 para la productora.';
+          benchmarkCompetencia = 'Full day de bodas premium en Santiago: $850.000 a $1.200.000 neto.';
 
         // SERVICIOS GENÉRICOS DE CATÁLOGO
         } else {
           tipo_doc = c.tipo_doc_costo || 'boleta';
-          liquido = c.costo;
-          costoBruto = tipo_doc === 'boleta' ? calcularBrutoBoleta(liquido) : liquido;
+          baseHistorica = c.costo;
+          costoBruto = tipo_doc === 'boleta' ? calcularBruto5050(baseHistorica) : baseHistorica;
           netoSugerido = Math.max(c.valor_neto, Math.round(costoBruto * 1.35));
-          justificacion = 'Ajuste proporcional aplicando margen base del 35% sobre el costo real.';
+          justificacion = 'Directiva CEO 50/50: Impacto tributario dividido a partes iguales (7,625% empresa / 7,625% contratado).';
           benchmarkCompetencia = 'Tarifa referencial estándar de mercado.';
         }
 
-        const retencionSII = tipo_doc === 'boleta' ? (costoBruto - liquido) : 0;
+        const retencionSII = tipo_doc === 'boleta' ? calcularRetencionSII(costoBruto) : 0;
+        const liquido = tipo_doc === 'boleta' ? calcularLiquido5050(costoBruto) : costoBruto;
+        const aporteRetencionDUO = tipo_doc === 'boleta' ? (costoBruto - baseHistorica) : 0;
+        const aporteRetencionProveedor = tipo_doc === 'boleta' ? (baseHistorica - liquido) : 0;
         const gananciaNeta = Math.max(0, netoSugerido - costoBruto);
         const margen = costoBruto > 0 ? (gananciaNeta / costoBruto) * 100 : 0;
         const totalClienteIva = Math.round(netoSugerido * 1.19);
@@ -235,6 +246,8 @@ export function StrategicPricingDialog({
           selected: true,
           tipo_doc,
           liquidoProveedor: liquido,
+          aporteRetencionDUO,
+          aporteRetencionProveedor,
           retencionSII,
           costoBrutoTotal: costoBruto,
           costoAnterior: c.costo,
@@ -254,7 +267,7 @@ export function StrategicPricingDialog({
     }
   }, [open, initialized, currentCosts]);
 
-  // Edición reactiva del Líquido Proveedor
+  // Edición reactiva del Líquido Proveedor (con recalibración bajo la regla 50/50)
   const handleLiquidoChange = (id: string, value: string) => {
     const newLiquido = Math.max(0, parseInt(value.replace(/\D/g, '')) || 0);
 
@@ -262,10 +275,14 @@ export function StrategicPricingDialog({
       prev.map((item) => {
         if (item.id !== id) return item;
 
+        // Si es boleta, el líquido equivale a la base descontada en 7.625%
+        // Bruto = Líquido / (1 - 0.1525)
         const costoBruto = item.tipo_doc === 'boleta' 
-          ? calcularBrutoBoleta(newLiquido) 
+          ? Math.round(newLiquido / (1 - RETENCION_TOTAL_2026)) 
           : newLiquido;
-        const retencion = item.tipo_doc === 'boleta' ? (costoBruto - newLiquido) : 0;
+        const retencion = item.tipo_doc === 'boleta' ? Math.round(costoBruto * RETENCION_TOTAL_2026) : 0;
+        const aporteDUO = item.tipo_doc === 'boleta' ? Math.round(retencion / 2) : 0;
+        const aporteProv = retencion - aporteDUO;
         const ganancia = Math.max(0, item.netoSugerido - costoBruto);
         const margen = costoBruto > 0 ? (ganancia / costoBruto) * 100 : 0;
         const dif = costoBruto - item.costoAnterior;
@@ -273,6 +290,8 @@ export function StrategicPricingDialog({
         return {
           ...item,
           liquidoProveedor: newLiquido,
+          aporteRetencionDUO: aporteDUO,
+          aporteRetencionProveedor: aporteProv,
           retencionSII: retencion,
           costoBrutoTotal: costoBruto,
           difCosto: dif,
@@ -314,9 +333,12 @@ export function StrategicPricingDialog({
 
         const newTipo: 'boleta' | 'factura' = item.tipo_doc === 'boleta' ? 'factura' : 'boleta';
         const costoBruto = newTipo === 'boleta' 
-          ? calcularBrutoBoleta(item.liquidoProveedor) 
-          : item.liquidoProveedor;
-        const retencion = newTipo === 'boleta' ? (costoBruto - item.liquidoProveedor) : 0;
+          ? calcularBruto5050(item.costoAnterior) 
+          : item.costoAnterior;
+        const retencion = newTipo === 'boleta' ? calcularRetencionSII(costoBruto) : 0;
+        const liquido = newTipo === 'boleta' ? calcularLiquido5050(costoBruto) : costoBruto;
+        const aporteDUO = newTipo === 'boleta' ? (costoBruto - item.costoAnterior) : 0;
+        const aporteProv = newTipo === 'boleta' ? (item.costoAnterior - liquido) : 0;
         const ganancia = Math.max(0, item.netoSugerido - costoBruto);
         const margen = costoBruto > 0 ? (ganancia / costoBruto) * 100 : 0;
         const dif = costoBruto - item.costoAnterior;
@@ -324,6 +346,9 @@ export function StrategicPricingDialog({
         return {
           ...item,
           tipo_doc: newTipo,
+          liquidoProveedor: liquido,
+          aporteRetencionDUO: aporteDUO,
+          aporteRetencionProveedor: aporteProv,
           retencionSII: retencion,
           costoBrutoTotal: costoBruto,
           difCosto: dif,
@@ -354,8 +379,8 @@ export function StrategicPricingDialog({
 
     const confirmSave = window.confirm(
       `¿Está segura/o de aplicar definitivamente estas ${selectedItems.length} tarifas en el Catálogo Maestro?\n\n` +
-      `Esta acción guardará los nuevos costos brutos, retenciones y precios de venta oficiales.\n` +
-      `De acuerdo a la directiva, esta propuesta es de UN SOLO USO y desaparecerá permanentemente tras su aplicación.`
+      `Se aplicará la directiva de la CEO: Reparto 50/50 del impacto tributario (7,625% Empresa / 7,625% Contratado).\n` +
+      `De acuerdo a sus instrucciones, esta propuesta es de UN SOLO USO y desaparecerá permanentemente tras su aplicación.`
     );
     if (!confirmSave) return;
 
@@ -377,7 +402,7 @@ export function StrategicPricingDialog({
       // 2. Insertar registro persistente de control para que desaparezca para siempre
       await (supabase.from('master_costs') as any).insert({
         servicio: '__SYSTEM_STRATEGIC_PROPOSAL_2026_APPLIED__',
-        tiempo_detalle: '2026_applied',
+        tiempo_detalle: '2026_applied_50_50',
         tipo_evento: 'System',
         costo: 0,
         ganancia: 0,
@@ -392,9 +417,9 @@ export function StrategicPricingDialog({
       }
 
       alert(
-        `¡Propuesta Estratégica 2026 aplicada con total éxito!\n\n` +
+        `¡Propuesta Estratégica 2026 (Esquema 50/50) aplicada con total éxito!\n\n` +
         `Se han actualizado ${selectedItems.length} tarifas en el Catálogo Maestro.\n` +
-        `La vista estratégica ha cumplido su objetivo de un solo uso y se ha retirado de la interfaz.`
+        `El asistente ha cumplido su objetivo de un solo uso y se ha retirado de la interfaz.`
       );
 
       onSuccess();
@@ -415,7 +440,7 @@ export function StrategicPricingDialog({
       p.justificacion.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Cálculos consolidados para el footer
+  // Métricas consolidadas
   const totalGananciaProyectada = proposals
     .filter((p) => p.selected)
     .reduce((acc, curr) => acc + curr.gananciaNeta, 0);
@@ -423,31 +448,37 @@ export function StrategicPricingDialog({
     .filter((p) => p.selected)
     .reduce((acc, curr) => acc + (curr.netoAnterior - curr.costoAnterior), 0);
   const incrementoGanancia = totalGananciaProyectada - totalGananciaAnterior;
+  const totalAhorroTributarioEmpresa = proposals
+    .filter((p) => p.selected && p.tipo_doc === 'boleta')
+    .reduce((acc, curr) => acc + curr.aporteRetencionProveedor, 0);
 
   return (
     <Dialog 
       open={open} 
       onOpenChange={onOpenChange} 
-      className="w-[98vw] max-w-[1650px] md:max-w-[1650px] h-[94vh] sm:h-[95vh] flex flex-col p-0 overflow-hidden"
+      className="w-[98vw] max-w-[1700px] md:max-w-[1700px] h-[94vh] sm:h-[95vh] flex flex-col p-0 overflow-hidden"
     >
       {/* Cabecera Principal */}
       <DialogHeader className="px-6 py-4 border-b border-border/60 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shrink-0">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-300">
-              <Sparkles className="h-6 w-6" />
+              <Scale className="h-6 w-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <DialogTitle className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                  Propuesta Estratégica de Tarifas & Retención Tributaria 2026–2027
+                  Propuesta Estratégica 2026: Esquema 50/50 de Retención Tributaria
                 </DialogTitle>
+                <Badge className="bg-emerald-500 text-slate-950 font-black text-xs uppercase px-2.5 py-0.5 border-0 shadow-xs">
+                  Directiva CEO 50/50
+                </Badge>
                 <Badge className="bg-amber-400 text-amber-950 font-bold text-xs uppercase px-2 py-0.5 border-0">
                   Uso Único
                 </Badge>
               </div>
               <DialogDescription className="text-xs text-indigo-200/90 mt-1">
-                Auditoría financiera integral para DUO Producciones: Corrección de Boletas de Honorarios (15,25% SII), benchmark competitivo y preservación del costo de Fotografía ($65.000).
+                La retención legal del 15,25% de Boletas de Honorarios se reparte en partes iguales: <strong>7,625% absorbido por DUO</strong> y <strong>7,625% asumido por el contratado</strong>. Preserva costo de Fotografía ($65.000) y benchmark comercial de la Zona Central.
               </DialogDescription>
             </div>
           </div>
@@ -461,16 +492,16 @@ export function StrategicPricingDialog({
       </DialogHeader>
 
       <DialogBody className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar bg-slate-50/50 dark:bg-slate-950/20">
-        {/* Banner Desplegable de Fundamento Técnico y Tributario */}
+        {/* Banner Desplegable de Fundamento Técnico y Tributario 50/50 */}
         <div className="rounded-xl border border-indigo-200 bg-white dark:bg-slate-900 dark:border-indigo-900/60 shadow-xs overflow-hidden transition-all">
           <div 
             onClick={() => setShowExplanation(!showExplanation)}
             className="flex items-center justify-between px-5 py-3.5 bg-indigo-50/70 dark:bg-indigo-950/40 cursor-pointer hover:bg-indigo-100/60 transition-colors"
           >
             <div className="flex items-center gap-2.5 text-indigo-950 dark:text-indigo-200">
-              <Info className="h-5 w-5 text-indigo-600 shrink-0" />
+              <Scale className="h-5 w-5 text-indigo-600 shrink-0" />
               <span className="font-bold text-sm">
-                ¿Por qué se realizaron estos ajustes y qué cambios tributarios impactan a DUO en 2026? (Clic para {showExplanation ? 'ocultar' : 'expandir'})
+                ¿Cómo funciona la regla 50/50 de la CEO y qué impacto tiene en las utilidades de DUO? (Clic para {showExplanation ? 'ocultar' : 'expandir'})
               </span>
             </div>
             <button type="button" className="text-indigo-700 dark:text-indigo-300 p-1">
@@ -480,33 +511,33 @@ export function StrategicPricingDialog({
 
           {showExplanation && (
             <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs border-t border-indigo-100 dark:border-indigo-900/40 animate-in fade-in duration-200">
-              <div className="p-3.5 rounded-lg bg-red-50/60 dark:bg-red-950/20 border border-red-200/80 space-y-1.5">
-                <div className="flex items-center gap-2 text-red-900 dark:text-red-300 font-bold text-xs uppercase tracking-wider">
-                  <Receipt className="h-4 w-4 text-red-600" />
-                  1. Retención Legal SII 2026 (15,25%)
+              <div className="p-3.5 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-200/80 space-y-1.5">
+                <div className="flex items-center gap-2 text-indigo-950 dark:text-indigo-300 font-bold text-xs uppercase tracking-wider">
+                  <Scale className="h-4 w-4 text-indigo-600" />
+                  1. Reparto Equitativo 50/50 (7,625% c/u)
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  Por ley (Ley 21.133), la retención de Boletas de Honorarios subió al <strong>15,25% en 2026</strong>. Si a un músico se le pagan $100.000 líquidos, el costo real para DUO es <strong>$117.994</strong> (Bruto = Líquido / 0,8475). Anteriormente se anotaban $100.000 y la empresa perdía $17.994 de su propia ganancia al pagar el Formulario F29 al SII.
+                  En vez de que DUO absorba el 100% del 15,25% (que elevaba el costo de un solista a $82.596), <strong>la empresa aporta un +7,625%</strong> sobre la base histórica ($75.338 bruto) y <strong>el músico aporta el otro 7,625%</strong> en su boleta ($63.849 líquido en mano). DUO entera el 15,25% legal ($11.489) íntegramente al SII.
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/80 space-y-1.5">
+              <div className="p-3.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/80 space-y-1.5">
                 <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-300 font-bold text-xs uppercase tracking-wider">
                   <TrendingUp className="h-4 w-4 text-emerald-600" />
-                  2. Benchmark Competitivo Zona Central
+                  2. Mayor Ganancia Neta para la Productora
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  DUO estaba cobrando entre un <strong>25% y 40% por debajo</strong> del mercado de Santiago y Rancagua (Grupo Trémolo, Orquesta Filarmónica). Solistas se vendían a $140.000 vs $200.000 del mercado; Dúos a $200.000 vs $300.000. Los nuevos precios recomendados absorben el costo tributario y entregan un margen neto saludable del <strong>35% al 60%</strong>.
+                  Al compartir la retención, el costo total de la empresa disminuye en todos los formatos musicales. Por ejemplo, en un Dúo de Cuerdas el costo baja de $117.994 a <strong>$107.625</strong>, elevando la utilidad neta de DUO de $117.006 a <strong>$127.375</strong> por evento (margen del 118,3%).
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/80 space-y-1.5">
+              <div className="p-3.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/80 space-y-1.5">
                 <div className="flex items-center gap-2 text-blue-900 dark:text-blue-300 font-bold text-xs uppercase tracking-wider">
                   <ShieldCheck className="h-4 w-4 text-blue-600" />
-                  3. Costo Fotografía Mantenido ($65.000)
+                  3. Fotografía ($65.000) & Facturas Protegidas
                 </div>
                 <p className="text-muted-foreground leading-relaxed">
-                  Se respetó de manera estricta la directiva de la socia: el costo de <strong>Fotografía Corporativa (25 a 50 fotos)</strong> se mantiene firme en <strong>$65.000</strong> con Rodrigo Abarca. Se ajustó únicamente el valor de venta al cliente a $95.000 neto para generar $30.000 de utilidad limpia.
+                  Para proveedores con Factura (como Rodrigo Abarca en Fotografía Corporativa de $65.000 y Gestser en amplificación de $50.000), <strong>no aplica retención de boleta</strong>. Sus costos se mantienen 100% intactos generando crédito fiscal IVA para la empresa.
                 </p>
               </div>
             </div>
@@ -520,20 +551,22 @@ export function StrategicPricingDialog({
             <Input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar servicio (ej: Solista, Fiamma, Boda)..."
+              placeholder="Buscar servicio (ej: Solista, Fiamma, Dúo)..."
               className="pl-9 h-8 text-xs bg-muted/30"
             />
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">💡 Tip de Edición:</span>
-            <span>Puede modificar en vivo las columnas de <strong>Líquido Proveedor</strong> o <strong>Neto Sugerido</strong> para recalcular impuestos y ganancias al instante.</span>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <Badge variant="outline" className="text-[11px] font-bold text-indigo-700 bg-indigo-50 border-indigo-200">
+              Ahorro tributario transferido al contratado: {formatCLP(totalAhorroTributarioEmpresa)}
+            </Badge>
+            <span className="hidden md:inline">💡 Puede editar cualquier celda de <strong>Líquido Proveedor</strong> o <strong>Venta Sugerida</strong>.</span>
           </div>
         </div>
 
         {/* Tabla Detallada Multicolumna */}
         <div className="border border-border/80 rounded-xl bg-white dark:bg-slate-900 shadow-xs overflow-x-auto">
-          <Table className="min-w-[1550px] text-xs">
+          <Table className="min-w-[1650px] text-xs">
             <TableHeader className="bg-slate-900 text-white sticky top-0 z-20">
               <TableRow className="hover:bg-slate-900 border-b border-slate-800 text-[11px]">
                 <TableHead className="w-[45px] text-center text-white">
@@ -545,39 +578,42 @@ export function StrategicPricingDialog({
                     title="Seleccionar o deseleccionar todos"
                   />
                 </TableHead>
-                <TableHead className="w-[220px] font-bold text-white">Servicio / Formato</TableHead>
-                <TableHead className="w-[130px] font-bold text-center text-amber-300 bg-amber-950/40">
-                  Líquido Proveedor (En Mano)
+                <TableHead className="w-[210px] font-bold text-white">Servicio / Formato</TableHead>
+                <TableHead className="w-[125px] font-bold text-center text-amber-300 bg-amber-950/40">
+                  Líquido Contratado (7,625% asumido)
                 </TableHead>
-                <TableHead className="w-[95px] font-bold text-center text-white">Doc. Legal</TableHead>
+                <TableHead className="w-[90px] font-bold text-center text-white">Doc. Legal</TableHead>
+                <TableHead className="w-[110px] font-bold text-right text-indigo-300 bg-indigo-950/40">
+                  Aporte DUO (+7,625%)
+                </TableHead>
+                <TableHead className="w-[115px] font-bold text-right text-amber-300 bg-amber-950/30">
+                  Aporte Contratado (7,625%)
+                </TableHead>
                 <TableHead className="w-[120px] font-bold text-right text-red-300 bg-red-950/40">
-                  Retención SII (15,25%)
+                  Retención SII F29 (15,25%)
                 </TableHead>
-                <TableHead className="w-[135px] font-bold text-right text-red-200 bg-red-900/50">
-                  Costo Total Empresa (Bruto)
+                <TableHead className="w-[130px] font-bold text-right text-red-200 bg-red-900/50">
+                  Costo Total DUO (Bruto 50/50)
                 </TableHead>
-                <TableHead className="w-[110px] font-bold text-right text-slate-300">
+                <TableHead className="w-[105px] font-bold text-right text-slate-300">
                   Costo Anterior
                 </TableHead>
-                <TableHead className="w-[100px] font-bold text-right text-amber-200">
-                  Dif. Costo
-                </TableHead>
-                <TableHead className="w-[115px] font-bold text-right text-slate-300">
+                <TableHead className="w-[110px] font-bold text-right text-slate-300">
                   Venta Anterior
                 </TableHead>
-                <TableHead className="w-[145px] font-bold text-right text-emerald-300 bg-emerald-950/50">
+                <TableHead className="w-[140px] font-bold text-right text-emerald-300 bg-emerald-950/50">
                   Venta Sugerida 2026 (Neto)
                 </TableHead>
-                <TableHead className="w-[125px] font-bold text-right text-emerald-200 bg-emerald-900/60">
+                <TableHead className="w-[120px] font-bold text-right text-emerald-200 bg-emerald-900/60">
                   Ganancia Neta ($)
                 </TableHead>
                 <TableHead className="w-[85px] font-bold text-center text-emerald-300">
                   Margen (%)
                 </TableHead>
-                <TableHead className="w-[120px] font-bold text-right text-slate-200">
+                <TableHead className="w-[115px] font-bold text-right text-slate-200">
                   Total Cliente (IVA)
                 </TableHead>
-                <TableHead className="w-[320px] font-bold text-white">
+                <TableHead className="w-[300px] font-bold text-white">
                   Justificación Estratégica & Benchmark
                 </TableHead>
               </TableRow>
@@ -610,7 +646,7 @@ export function StrategicPricingDialog({
                     </Badge>
                   </TableCell>
 
-                  {/* 3. Líquido Proveedor (Editable) */}
+                  {/* 3. Líquido Contratado (Editable) */}
                   <TableCell className="bg-amber-50/30 dark:bg-amber-950/10 p-2">
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] text-muted-foreground">$</span>
@@ -620,12 +656,12 @@ export function StrategicPricingDialog({
                         onChange={(e) => handleLiquidoChange(item.id, e.target.value)}
                         disabled={!item.selected}
                         className="h-7 text-xs text-right font-bold text-amber-900 dark:text-amber-200 w-full bg-white dark:bg-slate-900 border-amber-300 focus:ring-amber-500"
-                        title="Monto líquido que el proveedor o músico recibe en mano"
+                        title="Dinero líquido que recibe en mano el contratado tras su 7,625% de retención"
                       />
                     </div>
                   </TableCell>
 
-                  {/* 4. Régimen Tributario (Botón conmutador) */}
+                  {/* 4. Régimen Tributario */}
                   <TableCell className="text-center p-2">
                     <button
                       type="button"
@@ -636,40 +672,43 @@ export function StrategicPricingDialog({
                           ? 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200'
                           : 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'
                       }`}
-                      title="Clic para cambiar entre Boleta de Honorarios (15,25% retención) y Factura"
+                      title="Clic para cambiar entre Boleta de Honorarios (50/50) y Factura"
                     >
-                      {item.tipo_doc === 'boleta' ? 'Boleta 15,25%' : 'Factura (IVA)'}
+                      {item.tipo_doc === 'boleta' ? 'Boleta 50/50' : 'Factura'}
                     </button>
                   </TableCell>
 
-                  {/* 5. Retención SII (15,25%) */}
+                  {/* 5. Aporte DUO (+7,625%) */}
+                  <TableCell className="bg-indigo-50/30 dark:bg-indigo-950/10 text-right p-2 font-bold text-indigo-700 dark:text-indigo-300">
+                    {item.aporteRetencionDUO > 0 ? `+${formatCLP(item.aporteRetencionDUO)}` : '$0'}
+                  </TableCell>
+
+                  {/* 6. Aporte Contratado (7,625%) */}
+                  <TableCell className="bg-amber-50/20 dark:bg-amber-950/10 text-right p-2 font-medium text-amber-700 dark:text-amber-400">
+                    {item.aporteRetencionProveedor > 0 ? `-${formatCLP(item.aporteRetencionProveedor)}` : '$0'}
+                  </TableCell>
+
+                  {/* 7. Retención SII F29 (15,25%) */}
                   <TableCell className="bg-red-50/20 dark:bg-red-950/10 text-right p-2 font-semibold text-red-700 dark:text-red-400">
                     {item.retencionSII > 0 ? formatCLP(item.retencionSII) : '$0'}
                   </TableCell>
 
-                  {/* 6. Costo Total Empresa (Bruto Real) */}
+                  {/* 8. Costo Total DUO (Bruto) */}
                   <TableCell className="bg-red-50/40 dark:bg-red-950/20 text-right p-2 font-black text-red-800 dark:text-red-300">
                     {formatCLP(item.costoBrutoTotal)}
                   </TableCell>
 
-                  {/* 7. Costo Anterior ERP */}
+                  {/* 9. Costo Anterior ERP */}
                   <TableCell className="text-right p-2 text-muted-foreground line-through font-medium">
                     {formatCLP(item.costoAnterior)}
                   </TableCell>
 
-                  {/* 8. Dif. Costo */}
-                  <TableCell className="text-right p-2 font-bold text-[11px]">
-                    <span className={item.difCosto > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground'}>
-                      {item.difCosto > 0 ? `+${formatCLP(item.difCosto)}` : '$0'}
-                    </span>
-                  </TableCell>
-
-                  {/* 9. Venta Anterior Neto */}
+                  {/* 10. Venta Anterior Neto */}
                   <TableCell className="text-right p-2 text-muted-foreground font-medium">
                     {formatCLP(item.netoAnterior)}
                   </TableCell>
 
-                  {/* 10. Venta Sugerida 2026 (Neto) (Editable) */}
+                  {/* 11. Venta Sugerida 2026 (Neto) (Editable) */}
                   <TableCell className="bg-emerald-50/40 dark:bg-emerald-950/20 p-2">
                     <div className="flex items-center gap-1">
                       <span className="text-[11px] text-muted-foreground">$</span>
@@ -684,12 +723,12 @@ export function StrategicPricingDialog({
                     </div>
                   </TableCell>
 
-                  {/* 11. Ganancia Neta Empresa */}
+                  {/* 12. Ganancia Neta DUO */}
                   <TableCell className="bg-emerald-50/60 dark:bg-emerald-950/30 text-right p-2 font-black text-emerald-800 dark:text-emerald-200">
                     {formatCLP(item.gananciaNeta)}
                   </TableCell>
 
-                  {/* 12. Margen (%) */}
+                  {/* 13. Margen (%) */}
                   <TableCell className="text-center p-2">
                     <Badge
                       variant="outline"
@@ -703,13 +742,13 @@ export function StrategicPricingDialog({
                     </Badge>
                   </TableCell>
 
-                  {/* 13. Total Cliente (IVA 19%) */}
+                  {/* 14. Total Cliente (IVA 19%) */}
                   <TableCell className="text-right p-2 font-bold text-foreground">
                     {formatCLP(item.totalClienteIva)}
                   </TableCell>
 
-                  {/* 14. Justificación & Benchmark */}
-                  <TableCell className="py-2.5 px-3 max-w-[320px]">
+                  {/* 15. Justificación & Benchmark */}
+                  <TableCell className="py-2.5 px-3 max-w-[300px]">
                     <div className="text-[11px] text-slate-800 dark:text-slate-200 leading-snug">
                       {item.justificacion}
                     </div>
@@ -728,12 +767,12 @@ export function StrategicPricingDialog({
       <DialogFooter className="px-6 py-3.5 border-t border-border/80 bg-slate-900 text-white flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
         <div className="flex flex-wrap items-center gap-4 text-xs">
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-400">Total Ganancia Proyectada:</span>
+            <span className="text-slate-400">Ganancia Proyectada DUO:</span>
             <span className="font-black text-emerald-400 text-sm">{formatCLP(totalGananciaProyectada)}</span>
           </div>
           <div className="flex items-center gap-1.5 border-l border-slate-700 pl-4">
-            <span className="text-slate-400">Incremento Neto de Utilidad vs Base Anterior:</span>
-            <span className="font-bold text-amber-300 text-xs">+{formatCLP(incrementoGanancia)}</span>
+            <span className="text-slate-400">Aumento vs Modelo 100% Empresa:</span>
+            <span className="font-bold text-amber-300 text-xs">+{formatCLP(totalAhorroTributarioEmpresa)}</span>
           </div>
           <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-400 border-l border-slate-700 pl-4">
             <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" />
@@ -760,7 +799,7 @@ export function StrategicPricingDialog({
             className="text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-500 text-white shadow-md px-4 h-9"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Aceptar y Guardar Tarifas Definitivas ({selectedCount}) [Un Solo Uso]
+            Aceptar y Guardar Tarifas Definitivas ({selectedCount}) [Regla 50/50]
           </Button>
         </div>
       </DialogFooter>
