@@ -516,9 +516,9 @@
     "semantic_hash": ""
   },
   "src/lib/demo-seed.ts": {
-    "mtime": 1794621749.6891901,
-    "seen": 1794622167.2804718,
-    "ast_hash": "5152eb1c596d14ba76a3d65a3a6a6504",
+    "mtime": 1794626888.219108,
+    "seen": 1794626963.783667,
+    "ast_hash": "08b9b4de8616cb206fb360a5d82a219b",
     "semantic_hash": ""
   },
   "src/lib/supabase/admin.ts": {

@@ -189,6 +189,7 @@ function buildTransaction(params: {
   fecha: string;
   descripcion: string;
   docType: string;
+  created_at?: string;
 }) {
   const isGasto = params.type === 'GASTO_REAL';
   const isFacturaDoc = isGasto && params.docType === 'factura';
@@ -216,6 +217,7 @@ function buildTransaction(params: {
     es_insumo: false,
     iva_incluido: true,
     is_demo_base: true,
+    created_at: params.created_at || (params.fecha ? `${params.fecha}T12:00:00Z` : new Date().toISOString()),
   };
 }
 
