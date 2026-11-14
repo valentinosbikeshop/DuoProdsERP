@@ -18,11 +18,14 @@ import {
   Sparkles,
   Power,
   Paintbrush,
+  LogIn,
+  ShieldCheck,
 } from 'lucide-react';
 import { useUser } from '@/hooks/use-user';
 import { Organization, Profile } from '@/types';
 import { CompanyLogoMark } from '@/components/ui/kairos-logo';
 import { CompanyBrandingDialog, LogoUploadField } from '@/components/governance/company-branding-dialog';
+import { MfaSettingsCard } from '@/components/auth/mfa-settings-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -93,7 +96,7 @@ export default function GovernancePage() {
     adminPassword: '',
   });
 
-  const canAccess = !userLoading && !isDemo && (isSuperAdmin || isAdmin);
+  const canAccess = !userLoading && (isSuperAdmin || (!isDemo && isAdmin));
 
   const fetchGovernanceData = useCallback(async () => {
     if (!canAccess) {
@@ -254,6 +257,28 @@ export default function GovernancePage() {
     } catch {
       setFeedback({ type: 'error', message: 'Error de conexión al resetear la demo.' });
     } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleSwitchCompany = async (targetOrgId: string) => {
+    setActionLoadingId(`switch-${targetOrgId}`);
+    setFeedback(null);
+    try {
+      const res = await fetch('/api/admin/switch-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ organizationId: targetOrgId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFeedback({ type: 'error', message: data.error || 'No se pudo cambiar de empresa.' });
+        setActionLoadingId(null);
+        return;
+      }
+      window.location.href = '/';
+    } catch {
+      setFeedback({ type: 'error', message: 'Error de conexión al cambiar de entorno.' });
       setActionLoadingId(null);
     }
   };
@@ -438,7 +463,7 @@ export default function GovernancePage() {
       {/* Main Content */}
       {isSuperAdmin ? (
         <Tabs defaultValue="companies" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto">
             <TabsTrigger value="companies" className="gap-2">
               <Building2 className="h-4 w-4" />
               Empresas y Demo ({companies.length})
@@ -451,6 +476,10 @@ export default function GovernancePage() {
                   {pendingUsers.length}
                 </Badge>
               )}
+            </TabsTrigger>
+            <TabsTrigger value="security" className="gap-2">
+              <ShieldCheck className="h-4 w-4" />
+              Seguridad y 2FA
             </TabsTrigger>
           </TabsList>
 
@@ -547,47 +576,73 @@ export default function GovernancePage() {
                         </p>
                       )}
 
-                      <div className="pt-2 border-t flex items-center justify-between gap-2">
-                        {company.is_demo ? (
+                      <div className="pt-2 border-t space-y-2">
+                        {organization?.id === company.id ? (
+                          <div className="text-center py-1 text-xs font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 rounded-md">
+                            Entorno Visualizado Actualmente
+                          </div>
+                        ) : (
                           <Button
-                            variant="outline"
                             size="sm"
-                            onClick={handleResetDemoSandbox}
-                            disabled={actionLoadingId === 'reset-demo'}
-                            className="w-full gap-2 border-amber-500/40 hover:bg-amber-500/10"
+                            onClick={() => handleSwitchCompany(company.id)}
+                            disabled={actionLoadingId === `switch-${company.id}`}
+                            className={`w-full gap-2 ${
+                              company.is_demo
+                                ? 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-semibold'
+                                : ''
+                            }`}
                           >
-                            {actionLoadingId === 'reset-demo' ? (
+                            {actionLoadingId === `switch-${company.id}` ? (
                               <Loader2 className="h-3.5 w-3.5 animate-spin" />
                             ) : (
-                              <RotateCcw className="h-3.5 w-3.5" />
+                              <LogIn className="h-3.5 w-3.5" />
                             )}
-                            Resetear Demo Ahora
+                            {company.is_demo ? 'Entrar a Cuenta Demo' : 'Entrar / Inspeccionar'}
                           </Button>
-                        ) : (
-                          <>
+                        )}
+
+                        <div className="flex items-center justify-between gap-2">
+                          {company.is_demo ? (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => setBrandingTarget(company)}
-                              className="gap-1.5 flex-1"
+                              onClick={handleResetDemoSandbox}
+                              disabled={actionLoadingId === 'reset-demo'}
+                              className="w-full gap-2 border-amber-500/40 hover:bg-amber-500/10"
                             >
-                              <Paintbrush className="h-3.5 w-3.5" />
-                              Marca / Logo
+                              {actionLoadingId === 'reset-demo' ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              )}
+                              Resetear Demo Ahora
                             </Button>
-                            {!isDuo && (
+                          ) : (
+                            <>
                               <Button
-                                variant={company.is_active ? 'outline' : 'default'}
+                                variant="outline"
                                 size="sm"
-                                onClick={() => handleToggleCompanyActive(company)}
-                                disabled={actionLoadingId === company.id}
+                                onClick={() => setBrandingTarget(company)}
                                 className="gap-1.5 flex-1"
                               >
-                                <Power className="h-3.5 w-3.5" />
-                                {company.is_active ? 'Suspender' : 'Reactivar'}
+                                <Paintbrush className="h-3.5 w-3.5" />
+                                Marca / Logo
                               </Button>
-                            )}
-                          </>
-                        )}
+                              {!isDuo && (
+                                <Button
+                                  variant={company.is_active ? 'outline' : 'default'}
+                                  size="sm"
+                                  onClick={() => handleToggleCompanyActive(company)}
+                                  disabled={actionLoadingId === company.id}
+                                  className="gap-1.5 flex-1"
+                                >
+                                  <Power className="h-3.5 w-3.5" />
+                                  {company.is_active ? 'Suspender' : 'Reactivar'}
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -612,6 +667,11 @@ export default function GovernancePage() {
               onUpdateUser={handleUpdateUser}
               onDeleteUser={handleDeleteUser}
             />
+          </TabsContent>
+
+          {/* TAB 3: SECURITY & 2FA */}
+          <TabsContent value="security" className="space-y-4">
+            <MfaSettingsCard />
           </TabsContent>
         </Tabs>
       ) : (

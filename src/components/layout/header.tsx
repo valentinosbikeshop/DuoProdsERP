@@ -3,7 +3,8 @@
 import { useUser } from '@/hooks/use-user';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { Menu, LogOut, User } from 'lucide-react';
+import Link from 'next/link';
+import { Menu, LogOut, User, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,7 +20,7 @@ interface HeaderProps {
 }
 
 export function Header({ onToggleSidebar }: HeaderProps) {
-  const { profile, authUser, loading } = useUser();
+  const { profile, authUser, loading, isDemo } = useUser();
   const supabase = createClient();
   const router = useRouter();
 
@@ -62,6 +63,14 @@ export function Header({ onToggleSidebar }: HeaderProps) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {!isDemo && (
+              <Link href="/security">
+                <DropdownMenuItem className="cursor-pointer">
+                  <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
+                  <span>Seguridad y 2FA</span>
+                </DropdownMenuItem>
+              </Link>
+            )}
             <DropdownMenuItem onClick={handleSignOut} className="text-red-600 focus:text-red-600 focus:bg-red-50 cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />
               <span>Cerrar Sesión</span>

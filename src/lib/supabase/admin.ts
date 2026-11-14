@@ -59,6 +59,16 @@ export async function getAuthenticatedContext(req: NextRequest): Promise<Authent
 
     if (userError || !user) return null;
 
+    // Enforce 2FA (AAL2) when the user has a verified MFA factor enrolled
+    const hasVerifiedMfa = Boolean(user.factors?.some((f) => f.status === 'verified'));
+    if (hasVerifiedMfa) {
+      const { data: aalData, error: aalError } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aalError || !aalData || aalData.currentLevel !== 'aal2') {
+        return null;
+      }
+    }
+
     const admin = createAdminClient();
     const { data: profileData } = await admin
       .from('profiles')

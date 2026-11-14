@@ -18,12 +18,13 @@ function getAuthFlags(ctx: Awaited<ReturnType<typeof getAuthenticatedContext>>) 
   if (!ctx || !ctx.profile || ctx.profile.status !== 'active') {
     return { allowed: false, isSuperAdmin: false, orgId: null as string | null };
   }
-  if (ctx.organization?.is_demo) {
-    return { allowed: false, isSuperAdmin: false, orgId: null as string | null };
-  }
   const isSuperAdmin =
     Boolean(ctx.profile.is_super_admin) ||
     ctx.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+
+  if (!isSuperAdmin && ctx.organization?.is_demo) {
+    return { allowed: false, isSuperAdmin: false, orgId: null as string | null };
+  }
   const isCompanyAdmin = ctx.profile.role === 'admin' && Boolean(ctx.profile.organization_id);
 
   return {

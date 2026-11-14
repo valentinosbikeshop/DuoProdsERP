@@ -15,7 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { FlaskConical, Loader2, Sparkles, ShieldCheck } from 'lucide-react';
+import { FlaskConical, Loader2, Sparkles, ShieldCheck, KeyRound, ArrowLeft } from 'lucide-react';
 import { KairosLogo } from '@/components/ui/kairos-logo';
 
 export function LoginForm() {
@@ -26,6 +26,8 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +44,21 @@ export function LoginForm() {
         throw signInError;
       }
 
+      // Check if 2FA (TOTP) verification is required
+      const [{ data: aalData }, { data: factorsData }] = await Promise.all([
+        supabase.auth.mfa.getAuthenticatorAssuranceLevel(),
+        supabase.auth.mfa.listFactors(),
+      ]);
+
+      if (aalData?.nextLevel === 'aal2' && aalData?.currentLevel !== 'aal2') {
+        const verifiedTotp = factorsData?.totp?.find((f) => f.status === 'verified');
+        if (verifiedTotp) {
+          setMfaFactorId(verifiedTotp.id);
+          setMfaCode('');
+          return;
+        }
+      }
+
       router.push('/');
       router.refresh();
     } catch (err: any) {
@@ -49,6 +66,44 @@ export function LoginForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVerifyMfa = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaFactorId) return;
+
+    const cleanCode = mfaCode.replace(/\D/g, '');
+    if (cleanCode.length !== 6) {
+      setError('Ingresa los 6 dígitos de tu app autenticadora.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const { error: mfaError } = await supabase.auth.mfa.challengeAndVerify({
+        factorId: mfaFactorId,
+        code: cleanCode,
+      });
+      if (mfaError) {
+        throw new Error('Código 2FA incorrecto o expirado.');
+      }
+
+      router.push('/');
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || 'Error al validar código 2FA');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelMfa = async () => {
+    await supabase.auth.signOut();
+    setMfaFactorId(null);
+    setMfaCode('');
+    setPassword('');
+    setError(null);
   };
 
   const handleEnterDemo = async () => {
@@ -101,6 +156,56 @@ export function LoginForm() {
             Acceso privado multiempresa para gestión financiera, cotizaciones y producción de eventos
           </CardDescription>
         </CardHeader>
+        {mfaFactorId ? (
+          <form onSubmit={handleVerifyMfa}>
+            <CardContent className="space-y-4">
+              {error && (
+                <div className="p-3 text-sm font-medium text-red-600 bg-red-50 rounded-md border border-red-100">
+                  {error}
+                </div>
+              )}
+              <div className="p-3.5 rounded-lg bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-start gap-2.5">
+                <KeyRound className="h-4 w-4 text-indigo-700 shrink-0 mt-0.5" />
+                <span>
+                  Cuenta protegida con Verificación en Dos Pasos (2FA). Ingresa el código de 6 dígitos de tu app autenticadora para <strong>{email}</strong>.
+                </span>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="mfaCode">Código 2FA (6 dígitos)</Label>
+                <Input
+                  id="mfaCode"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  maxLength={6}
+                  placeholder="000000"
+                  value={mfaCode}
+                  onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  required
+                  disabled={busy}
+                  className="text-center font-mono text-xl tracking-[0.45em] focus-visible:ring-primary"
+                />
+              </div>
+            </CardContent>
+            <CardFooter className="flex flex-col space-y-3">
+              <Button type="submit" className="w-full" disabled={busy}>
+                {loading ? 'Verificando...' : 'Confirmar Acceso'}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelMfa}
+                disabled={busy}
+                className="w-full text-slate-500 gap-1.5"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" />
+                Volver e iniciar con otra cuenta
+              </Button>
+            </CardFooter>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             {error && (
@@ -156,6 +261,7 @@ export function LoginForm() {
             </div>
           </CardFooter>
         </form>
+        )}
       </Card>
 
       {/* Interactive Demo Sandbox Entry Card */}

@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { FlaskConical, RotateCcw, LogOut, Loader2, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { FlaskConical, RotateCcw, LogOut, Loader2, ShieldAlert, CheckCircle2, ArrowLeft } from 'lucide-react';
 
 interface DemoQuotaStats {
   userEventsCount: number;
@@ -24,12 +24,13 @@ interface DemoQuotaStats {
   maxItems: number;
 }
 
-export function DemoBanner() {
+export function DemoBanner({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
   const router = useRouter();
   const supabase = createClient();
   const [stats, setStats] = useState<DemoQuotaStats | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [returningHome, setReturningHome] = useState(false);
   const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   const fetchStatus = useCallback(async () => {
@@ -75,6 +76,25 @@ export function DemoBanner() {
     router.refresh();
   };
 
+  const handleReturnToDuo = async () => {
+    setReturningHome(true);
+    try {
+      const res = await fetch('/api/admin/switch-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ returnHome: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'No se pudo volver a DUO Producciones.');
+      }
+      window.location.href = '/governance';
+    } catch (err: any) {
+      alert(err.message || 'Error al regresar a tu empresa principal.');
+      setReturningHome(false);
+    }
+  };
+
   return (
     <>
       <div
@@ -100,6 +120,23 @@ export function DemoBanner() {
         </div>
 
         <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={returningHome}
+              onClick={handleReturnToDuo}
+              className="h-8 gap-1.5 text-xs font-semibold bg-indigo-500 text-white hover:bg-indigo-400 border-0"
+            >
+              {returningHome ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ArrowLeft className="h-3.5 w-3.5" />
+              )}
+              Volver a DUO / Gobernanza
+            </Button>
+          )}
           <Button
             type="button"
             size="sm"

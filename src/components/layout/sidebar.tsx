@@ -25,7 +25,7 @@ export function Sidebar({
 
   const visibleAdminLinks = adminLinks.filter((link) => {
     if (link.href === '/governance') {
-      return !isDemo && (isSuperAdmin || isAdmin);
+      return isSuperAdmin || (!isDemo && isAdmin);
     }
     return true;
   });

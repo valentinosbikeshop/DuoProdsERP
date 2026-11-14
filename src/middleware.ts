@@ -7,6 +7,7 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     const isPublicRoute = pathname === '/login' || pathname === '/register';
+    const isMfaRoute = pathname === '/mfa-challenge';
     const isPendingRoute = pathname === '/pending';
     const isApiRoute = pathname.startsWith('/api/');
     const isAuthCallback = pathname === '/api/auth/callback';
@@ -20,10 +21,25 @@ export async function middleware(request: NextRequest) {
       return supabaseResponse;
     }
 
-    // API routes: require authentication
+    // Check if authenticated user still needs to complete 2FA (TOTP AAL2)
+    let requiresMfaVerification = false;
+    if (user && Array.isArray(user.factors)) {
+      const hasVerifiedMfa = user.factors.some((f: any) => f.status === 'verified');
+      if (hasVerifiedMfa) {
+        const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (!aalData || aalData.currentLevel !== 'aal2') {
+          requiresMfaVerification = true;
+        }
+      }
+    }
+
+    // API routes: require authentication + AAL2 if MFA enrolled
     if (isApiRoute) {
-      if (!user) {
-        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+      if (!user || requiresMfaVerification) {
+        return NextResponse.json(
+          { error: requiresMfaVerification ? 'Se requiere verificación en dos pasos (2FA)' : 'No autorizado' },
+          { status: 401 }
+        );
       }
       return supabaseResponse;
     }
@@ -36,6 +52,19 @@ export async function middleware(request: NextRequest) {
     // Redirect unauthenticated users to login
     if (!user) {
       return NextResponse.redirect(new URL('/login', request.url));
+    }
+
+    // Enforce 2FA challenge before accessing any dashboard or protected route
+    if (requiresMfaVerification) {
+      if (!isMfaRoute) {
+        return NextResponse.redirect(new URL('/mfa-challenge', request.url));
+      }
+      return supabaseResponse;
+    }
+
+    // User already passed MFA (or does not have MFA) — redirect away from /mfa-challenge
+    if (isMfaRoute) {
+      return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Authenticated user trying to access login/register — redirect to home
@@ -52,12 +81,13 @@ export async function middleware(request: NextRequest) {
 
     if (!error && profile) {
       const org = (profile as any).organizations as { is_demo?: boolean; is_active?: boolean } | null;
+      const isSuperAdmin = Boolean((profile as any).is_super_admin);
 
       // Pending users or users without an assigned active organization can only access /pending
       const isPendingOrUnassigned =
         profile.status === 'pending' ||
         !profile.organization_id ||
-        (org && org.is_active === false);
+        (!isSuperAdmin && org && org.is_active === false);
 
       if (isPendingOrUnassigned && !isPendingRoute) {
         return NextResponse.redirect(new URL('/pending', request.url));
@@ -70,7 +100,6 @@ export async function middleware(request: NextRequest) {
 
       // Governance is restricted to super_admin or non-demo company admins
       if (pathname.startsWith('/governance')) {
-        const isSuperAdmin = Boolean((profile as any).is_super_admin);
         const isNonDemoCompanyAdmin = profile.role === 'admin' && !org?.is_demo;
         if (!isSuperAdmin && !isNonDemoCompanyAdmin) {
           return NextResponse.redirect(new URL('/', request.url));
