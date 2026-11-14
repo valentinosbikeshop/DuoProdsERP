@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useUser } from '@/hooks/use-user';
 import { useRouter, useParams } from 'next/navigation';
 import { Event, EventItem, AiSuggestion } from '@/types';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -42,6 +43,7 @@ export default function EventDetailPage() {
   const id = params.id as string;
   const router = useRouter();
   const supabase = createClient();
+  const { isDemo } = useUser();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [items, setItems] = useState<EventItem[]>([]);
@@ -328,6 +330,11 @@ export default function EventDetailPage() {
               <Badge variant="outline" className="border-indigo-300 text-indigo-700 bg-indigo-50 font-medium">
                 <Store className="mr-1 h-3 w-3" />
                 Venta al por Menor
+              </Badge>
+            )}
+            {event.is_demo_base && (
+              <Badge variant="outline" className="border-amber-300 text-amber-800 bg-amber-50 font-medium">
+                Ejemplo Base
               </Badge>
             )}
             {isCompleted && (
@@ -662,6 +669,7 @@ export default function EventDetailPage() {
                 isCompleted={isCompleted}
                 eventId={id}
                 hasRetailSales={event.has_retail_sales ?? false}
+                isDemo={isDemo}
               />
             </CardContent>
           </Card>

@@ -72,7 +72,7 @@ export function CostFormDialog({
     
     try {
       if (editingCost) {
-        await (supabase.from('master_costs') as any)
+        const { error } = await (supabase.from('master_costs') as any)
           .update({
             servicio,
             tiempo_detalle: tiempoDetalle,
@@ -83,8 +83,9 @@ export function CostFormDialog({
             valor_total: valorTotal,
           })
           .eq('id', editingCost.id)
+        if (error) throw error
       } else {
-        await (supabase.from('master_costs') as any).insert({
+        const { error } = await (supabase.from('master_costs') as any).insert({
           servicio,
           tiempo_detalle: tiempoDetalle,
           tipo_evento: tipoEvento,
@@ -93,13 +94,19 @@ export function CostFormDialog({
           valor_neto: valorNeto,
           valor_total: valorTotal,
         } as never)
+        if (error) throw error
       }
       
       onOpenChange(false)
       if (onSuccess) onSuccess()
       router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving cost:', error)
+      alert(
+        error?.code === '42501'
+          ? 'Alcanzaste el límite de tarifas nuevas en la sesión de prueba. Usa "Resetear Prueba" en la barra superior para limpiar tus pruebas y continuar.'
+          : error?.message || 'Error al guardar la tarifa.'
+      )
     } finally {
       setLoading(false)
     }

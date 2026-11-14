@@ -1,45 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
-import { createServerClient } from '@supabase/ssr';
+import { getAuthenticatedContext } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 
-async function verifyAuth(req: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn('verifyAuth: Faltan variables de entorno NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-    return null;
-  }
-
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseKey,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-  } catch (err) {
-    console.error('Error al validar sesión en verifyAuth:', err);
-    return null;
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const user = await verifyAuth(req);
-    if (!user) {
+    const ctx = await getAuthenticatedContext(req);
+    if (!ctx || !ctx.profile?.organization_id) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
+    const orgName = ctx.organization?.name || 'DUO Producciones';
 
     const { messages, draftItems, fileText } = await req.json();
 
@@ -118,7 +89,7 @@ Costo Total acumulado: $${totalCosto} | Total Facturación Estimada: $${totalVen
       itemsContext = sections.join('\n\n');
     }
 
-    const systemInstruction = `Eres el Asistente Inteligente de Borradores de DUO Producciones.
+    const systemInstruction = `Eres el Asistente Inteligente de Borradores de ${orgName}.
 Tu misión es asistir al productor a gestionar, ordenar, estructurar, corregir y pulir los presupuestos y borradores de eventos.
 
 TIENES ACCESO COMPLETO A TODA LA INFORMACIÓN DE LOS ÍTEMS DEL BORRADOR:

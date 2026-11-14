@@ -89,6 +89,14 @@ export default function AnalyticsPage() {
         }
 
         event.event_items.forEach((item: any) => {
+          if (
+            !item.approved ||
+            item.es_insumo ||
+            item.tipo_evento === 'ABONO_CLIENTE' ||
+            item.tipo_evento === 'GASTO_REAL'
+          ) {
+            return;
+          }
           const qty = item.cantidad || 1;
           const vTotal = (item.valor_total || 0) * qty;
           const vNeto = (item.valor_neto || 0) * qty;
@@ -195,7 +203,9 @@ export default function AnalyticsPage() {
     // 3. Detalle de Ítems (Costos) Sheet
     const itemsExport: any[] = [];
     filteredEventsRaw.forEach(ev => {
-      ev.event_items.forEach((item: any) => {
+      ev.event_items
+        .filter((item: any) => item.approved && !item.es_insumo && item.tipo_evento !== 'ABONO_CLIENTE' && item.tipo_evento !== 'GASTO_REAL')
+        .forEach((item: any) => {
         itemsExport.push({
           'Evento': ev.name,
           'Servicio': item.servicio,

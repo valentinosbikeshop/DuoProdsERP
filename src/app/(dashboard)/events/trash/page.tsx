@@ -4,13 +4,14 @@ import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Trash, RefreshCcw, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { useUser } from '@/hooks/use-user';
 import { Button } from '@/components/ui/button';
 import { Event } from '@/types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 
 export default function TrashPage() {
   const supabase = createClient();
-  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const { isAdmin, isDemo } = useUser();
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,11 +30,8 @@ export default function TrashPage() {
   }, [supabase]);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setCurrentUserEmail(user?.email || null);
-    });
     fetchTrashedEvents();
-  }, [supabase, fetchTrashedEvents]);
+  }, [fetchTrashedEvents]);
 
 
   const handleRestore = async (id: string) => {
@@ -122,7 +120,7 @@ export default function TrashPage() {
                       <RefreshCcw className="h-4 w-4 mr-2" />
                       Recuperar
                     </Button>
-                    {currentUserEmail === 'valentinosbikeshop@gmail.com' && (
+                    {(isAdmin || (isDemo && !event.is_demo_base)) && (
                       <Button onClick={() => handlePermanentDelete(event.id)} variant="destructive">
                         <Trash className="h-4 w-4 mr-2" />
                         Borrar Definitivamente

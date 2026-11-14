@@ -2,47 +2,17 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI, Type } from '@google/genai';
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-
-// Verify the request comes from an authenticated user
-async function verifyAuth(req: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn('verifyAuth: Faltan variables de entorno NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel.');
-    return null;
-  }
-
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseKey,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-  } catch (err) {
-    console.error('Error al validar sesión en verifyAuth:', err);
-    return null;
-  }
-}
+import { createAdminClient, getAuthenticatedContext } from '@/lib/supabase/admin';
 
 export async function POST(req: NextRequest) {
   try {
-    // Auth guard: reject unauthenticated requests
-    const user = await verifyAuth(req);
-    if (!user) {
+    // Auth guard + tenant context
+    const ctx = await getAuthenticatedContext(req);
+    if (!ctx || !ctx.profile?.organization_id) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
+    const orgId = ctx.profile.organization_id;
+    const orgName = ctx.organization?.name || 'DUO Producciones';
 
     const body = await req.json();
     const { 
@@ -103,7 +73,7 @@ export async function POST(req: NextRequest) {
         .map((it: any) => `- ID: "${it.id}" | Servicio: "${it.servicio}" | Detalle: "${it.detalle || ''}" | Costo Unitario: $${it.costo} | Cantidad: ${it.cantidad} | Margen Actual: ${it.margen || 0}% | Tipo Doc: ${it.tipo_doc_costo || 'factura'}`)
         .join('\n');
 
-      const optimizePrompt = `Eres el Director Financiero de DUO Producciones en Chile.
+      const optimizePrompt = `Eres el Director Financiero de ${orgName} en Chile.
 El usuario ha establecido un MARGEN NETO OBJETIVO GLOBAL del ${desiredMargin}% para este evento.
 
 LISTA DE SERVICIOS EN BORRADOR A OPTIMIZAR:
@@ -154,26 +124,23 @@ DIRECTRICES DE DISTRIBUCIÓN ESTRATÉGICA:
       return NextResponse.json({ error: 'Se requiere al menos una descripción, prompt o documento' }, { status: 400 });
     }
 
-    // Cargar catálogo referencial de forma tolerante a fallos
+    // Cargar catálogo referencial estrictamente aislado por organización
     let catalogString = 'No hay servicios en el catálogo.';
     try {
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      
-      if (supabaseUrl && supabaseKey) {
-        const supabaseClient = createClient(supabaseUrl, supabaseKey);
-        const { data: masterCosts } = await supabaseClient
-          .from('master_costs')
-          .select('*');
+      const supabaseClient = createAdminClient();
+      const { data: masterCosts } = await supabaseClient
+        .from('master_costs')
+        .select('*')
+        .eq('organization_id', orgId);
 
-        if (masterCosts && masterCosts.length > 0) {
-          catalogString = masterCosts
-            .map(
-              (item) =>
-                `- ${item.servicio} | Detalle: ${item.tiempo_detalle} | Tipo: ${item.tipo_evento} | Costo: ${item.costo} | Ganancia: ${item.ganancia}`
-            )
-            .join('\n');
-        }
+      if (masterCosts && masterCosts.length > 0) {
+        catalogString = masterCosts
+          .filter((item) => !item.servicio.startsWith('__SYSTEM_'))
+          .map(
+            (item) =>
+              `- ${item.servicio} | Detalle: ${item.tiempo_detalle} | Tipo: ${item.tipo_evento} | Costo: ${item.costo} | Ganancia: ${item.ganancia}`
+          )
+          .join('\n');
       }
     } catch (catalogErr) {
       console.warn('Advertencia al consultar master_costs (usando catálogo base):', catalogErr);
@@ -217,7 +184,7 @@ DIRECTRICES DE DISTRIBUCIÓN ESTRATÉGICA:
       required: ['suggestions', 'reasoning'],
     };
 
-    let systemPrompt = `Eres un planificador financiero y cotizador experto de DUO Producciones, una prestigiosa empresa de producción de eventos y gastronomía en Chile.
+    let systemPrompt = `Eres un planificador financiero y cotizador experto de ${orgName}, una prestigiosa empresa de producción de eventos y gastronomía en Chile.
 
 CATÁLOGO DE SERVICIOS Y COSTOS REFERENCIALES:
 ${catalogString}

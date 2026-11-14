@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { DemoBanner } from '@/components/layout/demo-banner';
 import { Sheet, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useUser } from '@/hooks/use-user';
 import { Loader2 } from 'lucide-react';
@@ -13,7 +14,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { profile, loading } = useUser();
+  const { organization, loading, isAdmin, isSuperAdmin, isDemo } = useUser();
 
   if (loading) {
     return (
@@ -23,13 +24,19 @@ export default function DashboardLayout({
     );
   }
 
-  const isAdmin = profile?.role === 'admin';
+  const orgName = organization?.name || 'DUO Producciones';
 
   return (
     <div className="min-h-screen bg-background flex">
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
-        <Sidebar isAdmin={isAdmin} />
+        <Sidebar
+          isAdmin={isAdmin}
+          isSuperAdmin={isSuperAdmin}
+          isDemo={isDemo}
+          organizationName={orgName}
+          organizationLogoUrl={organization?.logo_url}
+        />
       </div>
 
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -37,12 +44,19 @@ export default function DashboardLayout({
           <SheetHeader className="sr-only">
             <SheetTitle>Navegación del Dashboard</SheetTitle>
           </SheetHeader>
-          <Sidebar isAdmin={isAdmin} />
+          <Sidebar
+            isAdmin={isAdmin}
+            isSuperAdmin={isSuperAdmin}
+            isDemo={isDemo}
+            organizationName={orgName}
+            organizationLogoUrl={organization?.logo_url}
+          />
         </div>
       </Sheet>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
+        {isDemo && <DemoBanner />}
         <Header onToggleSidebar={() => setSidebarOpen(true)} />
         <main className="p-6 flex-1 overflow-auto">
           {children}

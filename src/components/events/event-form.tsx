@@ -78,7 +78,11 @@ export function EventForm() {
       router.refresh();
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Ocurrió un error al crear el evento.');
+      if (err?.code === '42501') {
+        setError('Alcanzaste el límite de eventos de prueba simultáneos. Presiona "Resetear Prueba" en la barra superior para limpiar tus pruebas y crear nuevos eventos.');
+      } else {
+        setError(err.message || 'Ocurrió un error al crear el evento.');
+      }
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { cleanupStaleDemoData } from '@/lib/demo-seed';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -35,10 +37,23 @@ export async function GET(req: Request) {
       return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });
     }
 
+    // Limpieza automática de datos de prueba antiguos (>24h) si service role está disponible
+    let demoCleaned = false;
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const admin = createAdminClient();
+        const res = await cleanupStaleDemoData(admin);
+        demoCleaned = res.cleaned;
+      } catch (cleanupErr) {
+        console.warn('Advertencia al limpiar datos demo antiguos:', cleanupErr);
+      }
+    }
+
     return NextResponse.json({
       status: 'active',
       timestamp: new Date().toISOString(),
       recordFound: !!data && data.length > 0,
+      demoCleaned,
       message: 'Supabase mantenido activo exitosamente.',
     });
   } catch (err: any) {

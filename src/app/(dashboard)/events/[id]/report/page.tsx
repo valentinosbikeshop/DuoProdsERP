@@ -44,7 +44,14 @@ export default function ReportPage({ params }: { params: { id: string } }) {
         .eq('event_id', params.id);
       
       if (itemsData) {
-        setItems(itemsData);
+        const officialItems = (itemsData as EventItem[]).filter(
+          (it) =>
+            it.approved &&
+            !it.es_insumo &&
+            it.tipo_evento !== 'ABONO_CLIENTE' &&
+            it.tipo_evento !== 'GASTO_REAL'
+        );
+        setItems(officialItems);
       }
       setLoading(false);
     };

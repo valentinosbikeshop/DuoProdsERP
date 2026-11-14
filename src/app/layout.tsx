@@ -5,8 +5,9 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'DUO Producciones ERP',
-  description: 'Plataforma de gestión operativa y planificación con IA',
+  title: 'KAIROS ERP | Gestión Financiera & Producción de Eventos con IA',
+  description:
+    'KAIROS ERP — Plataforma SaaS Multi-Empresa de gestión operativa, cotizaciones y planificación financiera con IA',
 };
 
 export default function RootLayout({

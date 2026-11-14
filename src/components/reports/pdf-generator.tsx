@@ -2,13 +2,18 @@
 
 import { jsPDF } from 'jspdf';
 import { EventItem, Event } from '@/types';
+import { useUser } from '@/hooks/use-user';
 import { formatCLP, formatPercentage, formatDateCL } from '@/lib/utils';
+import { tryAddOrgLogoToPdf } from '@/lib/pdf-logo';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 
 export function PdfGenerator({ event, items }: { event: Event; items: EventItem[] }) {
   const [loading, setLoading] = useState(false);
+  const { organization } = useUser();
+  const orgTitle = (organization?.name || 'DUO Producciones').toUpperCase();
+  const orgFooter = organization?.name || 'DUO Producciones';
 
   const generatePDF = async () => {
     setLoading(true);
@@ -17,9 +22,10 @@ export function PdfGenerator({ event, items }: { event: Event; items: EventItem[
       const dateStr = new Date().toLocaleDateString('es-CL');
 
       // Header
+      tryAddOrgLogoToPdf(doc, organization?.logo_url, 20, 12, 13);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(22);
-      doc.text('DUO PRODUCCIONES', 105, 20, { align: 'center' });
+      doc.text(orgTitle, 105, 20, { align: 'center' });
       
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
@@ -144,7 +150,7 @@ export function PdfGenerator({ event, items }: { event: Event; items: EventItem[
       // Footer
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(8);
-      doc.text(`Documento generado por DUO Producciones ERP - ${dateStr}`, 105, 270, { align: 'center' });
+      doc.text(`Documento generado por ${orgFooter} ERP - ${dateStr}`, 105, 270, { align: 'center' });
 
       doc.save(`informe-${event.name}-${dateStr}.pdf`);
     } finally {

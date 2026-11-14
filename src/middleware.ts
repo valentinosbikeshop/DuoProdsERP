@@ -10,13 +10,17 @@ export async function middleware(request: NextRequest) {
     const isPendingRoute = pathname === '/pending';
     const isApiRoute = pathname.startsWith('/api/');
     const isAuthCallback = pathname === '/api/auth/callback';
-    
-    // Always allow auth callback (it handles its own auth)
-    if (isAuthCallback) {
+    const isPublicApi =
+      isAuthCallback ||
+      pathname === '/api/demo/enter' ||
+      pathname === '/api/cron/keep-alive';
+
+    // Always allow auth callback, demo entry, and cron keep-alive (each handles its own auth/validation)
+    if (isPublicApi) {
       return supabaseResponse;
     }
 
-    // API routes: require authentication (except auth callback above)
+    // API routes: require authentication
     if (isApiRoute) {
       if (!user) {
         return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -39,34 +43,44 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/', request.url));
     }
 
-    // Check user profile status and role
+    // Check user profile status, role, and organization
     const { data: profile, error } = await supabase
       .from('profiles')
-      .select('status, role')
+      .select('status, role, is_super_admin, organization_id, organizations(is_demo, is_active)')
       .eq('id', user.id)
       .single();
 
     if (!error && profile) {
-      // Pending users can only access /pending
-      if (profile.status === 'pending' && !isPendingRoute) {
+      const org = (profile as any).organizations as { is_demo?: boolean; is_active?: boolean } | null;
+
+      // Pending users or users without an assigned active organization can only access /pending
+      const isPendingOrUnassigned =
+        profile.status === 'pending' ||
+        !profile.organization_id ||
+        (org && org.is_active === false);
+
+      if (isPendingOrUnassigned && !isPendingRoute) {
         return NextResponse.redirect(new URL('/pending', request.url));
       }
 
-      // Active users should not be on /pending
-      if (profile.status === 'active' && isPendingRoute) {
+      // Active users with an active org should not be on /pending
+      if (!isPendingOrUnassigned && isPendingRoute) {
         return NextResponse.redirect(new URL('/', request.url));
       }
 
-      // Only admins can access /governance
-      if (pathname.startsWith('/governance') && profile.role !== 'admin') {
-        return NextResponse.redirect(new URL('/', request.url));
+      // Governance is restricted to super_admin or non-demo company admins
+      if (pathname.startsWith('/governance')) {
+        const isSuperAdmin = Boolean((profile as any).is_super_admin);
+        const isNonDemoCompanyAdmin = profile.role === 'admin' && !org?.is_demo;
+        if (!isSuperAdmin && !isNonDemoCompanyAdmin) {
+          return NextResponse.redirect(new URL('/', request.url));
+        }
       }
     }
 
     return supabaseResponse;
   } catch (error) {
     console.error('Middleware error:', error);
-    // On error, redirect to login instead of allowing access
     return NextResponse.redirect(new URL('/login', request.url));
   }
 }

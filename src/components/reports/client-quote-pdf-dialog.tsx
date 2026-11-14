@@ -3,7 +3,9 @@
 import React, { useState } from 'react';
 import { jsPDF } from 'jspdf';
 import { EventItem, Event } from '@/types';
+import { useUser } from '@/hooks/use-user';
 import { formatCLP, formatDateCL } from '@/lib/utils';
+import { tryAddOrgLogoToPdf } from '@/lib/pdf-logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -67,6 +69,16 @@ const DEFAULT_VIDEO_PRESETS: VideoPreset[] = [
 ];
 
 export function ClientQuotePdfDialog({ event, items, triggerButton }: ClientQuotePdfDialogProps) {
+  const { organization } = useUser();
+  const orgName = organization?.name || 'DUO Producciones';
+  const orgLegalName = organization?.legal_name || 'DUO Producciones SpA';
+  const orgSubtitle =
+    organization?.subtitle || 'PRODUCCIÓN DE EVENTOS, EXPERIENCIAS MUSICALES & SERVICIOS TÉCNICOS';
+  const orgRut = organization?.rut || '78.252.253-1';
+  const orgLocation = organization?.location || 'Rancagua, Chile';
+  const orgEmail = organization?.contact_email || 'duoprods.empresa@gmail.com';
+  const orgPhone = organization?.contact_phone || '+56 9 8229 0332';
+  const bankInfo = organization?.bank_info || {};
   const [isOpen, setIsOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
 
@@ -150,7 +162,7 @@ export function ClientQuotePdfDialog({ event, items, triggerButton }: ClientQuot
           doc.setFont('helvetica', 'normal');
           doc.setFontSize(8);
           doc.setTextColor(140, 140, 140);
-          doc.text(`DUO Producciones • Cotización formal: ${clientName}`, marginX, 12);
+          doc.text(`${orgName} • Cotización formal: ${clientName}`, marginX, 12);
           doc.text(`Página ${doc.getNumberOfPages()}`, marginX + contentWidth - 15, 12);
           doc.setDrawColor(220, 225, 230);
           doc.line(marginX, 14, marginX + contentWidth, 14);
@@ -158,15 +170,18 @@ export function ClientQuotePdfDialog({ event, items, triggerButton }: ClientQuot
       };
 
       // 1. HEADER INSTITUCIONAL
+      const hasLogo = tryAddOrgLogoToPdf(doc, organization?.logo_url, marginX, currentY - 6, 13);
+      const headerTextX = hasLogo ? marginX + 16 : marginX;
+
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(20);
       doc.setTextColor(18, 28, 48); // Navy corporativo
-      doc.text('DUO PRODUCCIONES', marginX, currentY);
+      doc.text(orgName.toUpperCase(), headerTextX, currentY);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(90, 105, 125);
-      doc.text('PRODUCCIÓN DE EVENTOS, EXPERIENCIAS MUSICALES & SERVICIOS TÉCNICOS', marginX, currentY + 5);
+      doc.text(orgSubtitle.toUpperCase(), headerTextX, currentY + 5);
 
       // Bloque derecho de cotización
       doc.setFont('helvetica', 'bold');
@@ -195,7 +210,7 @@ export function ClientQuotePdfDialog({ event, items, triggerButton }: ClientQuot
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(9);
       doc.setTextColor(60, 75, 95);
-      const greetingParagraph = "Como equipo DUO Producciones agradecemos su confianza y preferencia al contactarnos para ser parte de su importante evento. A continuación, ponemos a su disposición nuestra propuesta formal y técnica adaptada a sus requerimientos:";
+      const greetingParagraph = `Como equipo ${orgName} agradecemos su confianza y preferencia al contactarnos para ser parte de su importante evento. A continuación, ponemos a su disposición nuestra propuesta formal y técnica adaptada a sus requerimientos:`;
       const splitGreeting = doc.splitTextToSize(greetingParagraph, contentWidth);
       doc.text(splitGreeting, marginX, currentY);
       currentY += (splitGreeting.length * 4.2) + 4;
@@ -408,13 +423,13 @@ export function ClientQuotePdfDialog({ event, items, triggerButton }: ClientQuot
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(50, 65, 85);
 
-      doc.text('• Banco: Banco de Chile', marginX + 5, currentY + 11);
-      doc.text('• Tipo de Cuenta: Cuenta Corriente', marginX + 5, currentY + 16);
-      doc.text('• N° de Cuenta: 00-202-19108-07', marginX + 5, currentY + 21);
+      doc.text(`• Banco: ${bankInfo.banco || 'Por definir'}`, marginX + 5, currentY + 11);
+      doc.text(`• Tipo de Cuenta: ${bankInfo.tipo_cuenta || 'Cuenta Corriente'}`, marginX + 5, currentY + 16);
+      doc.text(`• N° de Cuenta: ${bankInfo.numero_cuenta || 'Por definir'}`, marginX + 5, currentY + 21);
 
-      doc.text('• Titular: DUO Producciones SpA', marginX + 90, currentY + 11);
-      doc.text('• RUT: 78.252.253-1', marginX + 90, currentY + 16);
-      doc.text('• Correo comprobantes: kpunsin@gmail.com / duoprods.empresa@gmail.com', marginX + 90, currentY + 21);
+      doc.text(`• Titular: ${bankInfo.titular || orgLegalName}`, marginX + 90, currentY + 11);
+      doc.text(`• RUT: ${bankInfo.rut || orgRut}`, marginX + 90, currentY + 16);
+      doc.text(`• Correo comprobantes: ${bankInfo.email || orgEmail}`, marginX + 90, currentY + 21);
 
       currentY += 29;
 
@@ -459,12 +474,13 @@ export function ClientQuotePdfDialog({ event, items, triggerButton }: ClientQuot
       doc.setFont('helvetica', 'italic');
       doc.setFontSize(8);
       doc.setTextColor(110, 125, 140);
-      doc.text('DUO Producciones SpA • Creación, Producción y Arte Musical • Rancagua, Chile', marginX + (contentWidth / 2), currentY, { align: 'center' });
-      doc.text('Contacto Comercial: duoprods.empresa@gmail.com | +56 9 8229 0332', marginX + (contentWidth / 2), currentY + 4.5, { align: 'center' });
+      doc.text(`${orgLegalName} • ${orgLocation}`, marginX + (contentWidth / 2), currentY, { align: 'center' });
+      doc.text(`Contacto Comercial: ${orgEmail} | ${orgPhone}`, marginX + (contentWidth / 2), currentY + 4.5, { align: 'center' });
 
       // Guardar PDF
       const sanitizedName = (clientName || 'Cliente').replace(/[^a-zA-Z0-9_-]/g, '_');
-      doc.save(`Cotizacion_DUO_${sanitizedName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+      const orgPrefix = (orgName || 'DUO').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 16);
+      doc.save(`Cotizacion_${orgPrefix}_${sanitizedName}_${new Date().toISOString().slice(0, 10)}.pdf`);
       setIsOpen(false);
     } catch (err: any) {
       console.error('Error al generar PDF de cotización:', err);
@@ -504,7 +520,7 @@ export function ClientQuotePdfDialog({ event, items, triggerButton }: ClientQuot
                 Generador de Cotización Formal para Cliente
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-0.5">
-                Genera un documento PDF impecable con el membrete oficial de DUO, ocultando costos y márgenes internos.
+                Genera un documento PDF impecable con el membrete oficial de {orgName}, ocultando costos y márgenes internos.
               </DialogDescription>
             </div>
           </div>

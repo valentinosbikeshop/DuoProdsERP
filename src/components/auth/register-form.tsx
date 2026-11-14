@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { KairosLogo } from '@/components/ui/kairos-logo';
 
 export function RegisterForm() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export function RegisterForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -48,6 +50,11 @@ export function RegisterForm() {
       const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            invite_code: inviteCode.trim().toUpperCase() || null,
+          },
+        },
       });
 
       if (signUpError) {
@@ -55,7 +62,7 @@ export function RegisterForm() {
       }
 
       setSuccess(true);
-      
+
       setTimeout(() => {
         router.push('/');
         router.refresh();
@@ -70,10 +77,12 @@ export function RegisterForm() {
   return (
     <Card className="w-full shadow-lg border-slate-200">
       <CardHeader className="space-y-3 text-center">
-        <div className="flex justify-center mb-2 text-5xl">🎵</div>
-        <CardTitle className="text-2xl font-bold tracking-tight text-slate-900">DUO Producciones</CardTitle>
+        <div className="flex justify-center">
+          <KairosLogo size="lg" />
+        </div>
+        <CardTitle className="sr-only">KAIROS ERP</CardTitle>
         <CardDescription className="text-slate-500">
-          Crea una cuenta para acceder al sistema
+          Crea una cuenta para acceder al entorno privado de tu empresa en KAIROS ERP
         </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
@@ -85,7 +94,7 @@ export function RegisterForm() {
           )}
           {success && (
             <div className="p-3 text-sm font-medium text-green-700 bg-green-50 rounded-md border border-green-100">
-              Registro exitoso. Tu cuenta ha sido creada y ahora un administrador (DUO Producciones) debe aprobar tu acceso en la sección Gobernanza.
+              Registro exitoso. Tu cuenta ha sido creada y quedará pendiente hasta que el administrador apruebe tu acceso en la sección Gobernanza.
             </div>
           )}
           <div className="space-y-2">
@@ -93,13 +102,28 @@ export function RegisterForm() {
             <Input
               id="email"
               type="email"
-              placeholder="tu@email.com"
+              placeholder="tu@empresa.cl"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
               disabled={loading || success}
               className="focus-visible:ring-primary"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="inviteCode">Código de Empresa (Opcional)</Label>
+            <Input
+              id="inviteCode"
+              type="text"
+              placeholder="Ej. EMPRESA-2026"
+              value={inviteCode}
+              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+              disabled={loading || success}
+              className="focus-visible:ring-primary uppercase"
+            />
+            <p className="text-[11px] text-slate-500">
+              Si tu empresa ya tiene entorno asignado, ingresa su código para vincular tu solicitud.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Contraseña</Label>

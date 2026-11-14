@@ -32,7 +32,7 @@ export function EventCard({ event, onDelete }: EventCardProps) {
                 {event.client_company || 'Sin empresa'}
               </CardDescription>
             </div>
-            {event.status === 'planning' && onDelete && (
+            {event.status === 'planning' && !event.is_demo_base && onDelete && (
               <button 
                 onClick={(e) => onDelete(event.id, e)}
                 className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
@@ -52,10 +52,15 @@ export function EventCard({ event, onDelete }: EventCardProps) {
             <MapPin className="w-4 h-4" />
             <span className="line-clamp-1">{event.location || 'Ubicación por definir'}</span>
           </div>
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="outline" className={cn("border-none", statusColor)}>
               {statusLabel}
             </Badge>
+            {event.is_demo_base && (
+              <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 text-[11px]">
+                Ejemplo Base
+              </Badge>
+            )}
           </div>
         </CardContent>
       </Card>

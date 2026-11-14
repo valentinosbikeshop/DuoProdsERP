@@ -26,9 +26,10 @@ interface EventItemsTableProps {
   eventId: string;
   isCompleted?: boolean;
   hasRetailSales?: boolean;
+  isDemo?: boolean;
 }
 
-export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, hasRetailSales = false }: EventItemsTableProps) {
+export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, hasRetailSales = false, isDemo = false }: EventItemsTableProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [returningId, setReturningId] = useState<string | null>(null);
   const [returningMultiple, setReturningMultiple] = useState(false);
@@ -198,6 +199,10 @@ export function EventItemsTable({ items, onItemDeleted, eventId, isCompleted, ha
   };
 
   const handleFileUpload = async (id: string, file: File) => {
+    if (isDemo) {
+      alert('En la Sesión de Prueba no se almacenan archivos adjuntos en la nube para mantener liviano el entorno. Puedes probar el lector IA de PDF/Excel/Imágenes en el Borrador de Costos.');
+      return;
+    }
     setUploadingId(id);
     try {
       const fileExt = file.name.split('.').pop();

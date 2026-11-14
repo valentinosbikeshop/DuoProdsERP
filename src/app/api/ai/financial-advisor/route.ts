@@ -1,46 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleGenAI } from '@google/genai';
-import { createServerClient } from '@supabase/ssr';
+import { getAuthenticatedContext } from '@/lib/supabase/admin';
 
 export const runtime = 'nodejs';
 
-// Verify the request comes from an authenticated user
-async function verifyAuth(req: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseKey) {
-    console.warn('verifyAuth: Faltan variables de entorno NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY.');
-    return null;
-  }
-
-  const supabase = createServerClient(
-    supabaseUrl,
-    supabaseKey,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user;
-  } catch (err) {
-    console.error('Error al validar sesión en verifyAuth:', err);
-    return null;
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const user = await verifyAuth(req);
-    if (!user) {
+    const ctx = await getAuthenticatedContext(req);
+    if (!ctx || !ctx.profile?.organization_id) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
+    const orgName = ctx.organization?.name || 'DUO Producciones';
 
     const { messages, eventData, approvedItems, filesText } = await req.json();
 
@@ -80,7 +50,7 @@ ${approvedItems.map((item: any) => `- ${item.cantidad}x ${item.servicio} (${item
 `;
     }
 
-    const systemPrompt = `Eres un Asesor Financiero y Experto en Presupuestos de Eventos altamente capacitado que trabaja para DUO Producciones, una prestigiosa empresa de producción y banquetería en Chile.
+    const systemPrompt = `Eres un Asesor Financiero y Experto en Presupuestos de Eventos altamente capacitado que trabaja para ${orgName}, una prestigiosa empresa de producción y banquetería en Chile.
 
 Tu objetivo principal es EXAMINAR EXHAUSTIVAMENTE el presupuesto del evento, buscando maximizar la rentabilidad, reducir costos innecesarios, proponer alternativas realistas y alertar sobre posibles pérdidas u omisiones críticas (por ejemplo, si faltan ítems logísticos obligatorios como fletes, hielo, personal de aseo o seguridad).
 

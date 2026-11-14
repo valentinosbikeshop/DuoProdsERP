@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Bot, Send, X, FileUp, Loader2, Sparkles, AlertCircle, ChevronDown, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Event, EventItem } from '@/types';
+import { useUser } from '@/hooks/use-user';
 import { cn } from '@/lib/utils';
 import { FileUpload } from '@/components/events/file-upload';
 
@@ -18,11 +19,13 @@ interface FloatingFinancialAdvisorProps {
 }
 
 export function FloatingFinancialAdvisor({ event, items }: FloatingFinancialAdvisorProps) {
+  const { organization } = useUser();
+  const orgName = organization?.name || 'DUO Producciones';
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: `¡Hola! Soy tu Asesor Financiero IA de DUO Producciones. Estoy aquí para analizar el presupuesto de **${event.name}**. Actualmente tenemos **${items.length}** ítems aprobados. ¿En qué te puedo ayudar para mejorar la rentabilidad o reducir costos?`
+      content: `¡Hola! Soy tu Asesor Financiero IA de ${orgName}. Estoy aquí para analizar el presupuesto de **${event.name}**. Actualmente tenemos **${items.length}** ítems aprobados. ¿En qué te puedo ayudar para mejorar la rentabilidad o reducir costos?`
     }
   ]);
   const [input, setInput] = useState('');

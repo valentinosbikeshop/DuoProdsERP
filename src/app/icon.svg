@@ -1,0 +1,25 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="kairosBg" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#1E1B4B" />
+    </linearGradient>
+    <linearGradient id="kairosPrism" x1="16" y1="10" x2="31" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#FBBF24" />
+    </linearGradient>
+    <linearGradient id="kairosWing" x1="17" y1="20" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#818CF8" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="38" height="38" rx="10" fill="url(#kairosBg)" stroke="#334155" stroke-width="1.2" />
+  <!-- Pillar (Precision Axis) -->
+  <rect x="11" y="9.5" width="3.8" height="21" rx="1.9" fill="#F8FAFC" />
+  <!-- Upper Kairos Temporal Vector (Gold Apex) -->
+  <path d="M16.5 19.6L25.8 10.2C26.4 9.6 27.3 9.5 28.0 9.9C28.8 10.4 28.9 11.5 28.2 12.2L19.8 20.6L16.5 19.6Z" fill="url(#kairosPrism)" />
+  <!-- Lower Momentum Vector (Indigo) -->
+  <path d="M19.8 20.1L28.4 28.0C29.1 28.7 29.0 29.8 28.2 30.3C27.5 30.7 26.5 30.6 25.9 30.0L16.6 21.1L19.8 20.1Z" fill="url(#kairosWing)" />
+  <!-- Moment Focal Node -->
+  <circle cx="17.8" cy="20.4" r="1.9" fill="#FBBF24" />
+</svg>

@@ -9,11 +9,15 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { KairosLogo } from '@/components/ui/kairos-logo';
 
 export default function PendingPage() {
   return (
     <Card className="w-full shadow-lg border-slate-200 animate-in fade-in zoom-in duration-500">
       <CardHeader className="space-y-4 text-center pb-6">
+        <div className="flex justify-center">
+          <KairosLogo size="md" />
+        </div>
         <div className="flex justify-center">
           <div className="rounded-full bg-amber-100 p-4 shadow-sm border border-amber-200">
             <Clock className="h-10 w-10 text-amber-600 animate-pulse" />

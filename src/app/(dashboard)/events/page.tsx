@@ -39,6 +39,12 @@ export default function EventsPage() {
     e.preventDefault();
     e.stopPropagation();
 
+    const targetEvent = events.find((ev) => ev.id === id);
+    if (targetEvent?.is_demo_base) {
+      alert('Este evento es un Ejemplo Base del Sandbox y está protegido. Puedes crear tus propios eventos para probar eliminaciones o usar "Resetear Prueba".');
+      return;
+    }
+
     // Doble confirmación explícita
     const firstConfirm = window.confirm("¿Estás seguro de que deseas mover este evento a la papelera?");
     if (!firstConfirm) return;
