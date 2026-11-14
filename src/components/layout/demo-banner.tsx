@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { FlaskConical, RotateCcw, LogOut, Loader2, ShieldAlert, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { FlaskConical, RotateCcw, LogOut, Loader2, ShieldAlert, CheckCircle2, ArrowLeft, Compass } from 'lucide-react';
 
 interface DemoQuotaStats {
   userEventsCount: number;
@@ -24,7 +24,13 @@ interface DemoQuotaStats {
   maxItems: number;
 }
 
-export function DemoBanner({ isSuperAdmin = false }: { isSuperAdmin?: boolean }) {
+export function DemoBanner({
+  isSuperAdmin = false,
+  onSignOut,
+}: {
+  isSuperAdmin?: boolean;
+  onSignOut?: () => Promise<void> | void;
+}) {
   const router = useRouter();
   const supabase = createClient();
   const [stats, setStats] = useState<DemoQuotaStats | null>(null);
@@ -71,6 +77,10 @@ export function DemoBanner({ isSuperAdmin = false }: { isSuperAdmin?: boolean })
   };
 
   const handleExitDemo = async () => {
+    if (onSignOut) {
+      await onSignOut();
+      return;
+    }
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
@@ -120,6 +130,18 @@ export function DemoBanner({ isSuperAdmin = false }: { isSuperAdmin?: boolean })
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              window.dispatchEvent(new CustomEvent('kairos:open-guide', { detail: { tab: 'tour' } }))
+            }
+            className="h-8 gap-1.5 text-xs font-semibold bg-slate-800 text-amber-300 hover:bg-slate-700 border border-slate-700"
+          >
+            <Compass className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Guía Interactiva</span>
+          </Button>
           {isSuperAdmin && (
             <Button
               type="button"
@@ -180,7 +202,7 @@ export function DemoBanner({ isSuperAdmin = false }: { isSuperAdmin?: boolean })
             </p>
             <ul className="list-disc pl-4 space-y-1 text-amber-800">
               <li>Se eliminarán todos los eventos, ítems y tarifas nuevas que creaste en esta sesión.</li>
-              <li>Se mantendrán y restaurarán intactos los 4 eventos base y las 12 tarifas de ejemplo.</li>
+              <li>Se mantendrán y restaurarán intactos los 6 eventos base y las 24 tarifas de ejemplo.</li>
             </ul>
           </div>
           {resetMessage && (

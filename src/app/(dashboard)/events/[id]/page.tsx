@@ -34,7 +34,8 @@ import {
   FileSpreadsheet,
   ClipboardList,
   Store,
-  Upload
+  Upload,
+  Receipt
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -716,122 +717,257 @@ export default function EventDetailPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {transactions.map((t, idx) => (
-                      <div 
-                        key={idx} 
-                        className="flex justify-between items-center p-3 border border-border/50 rounded-lg bg-card/50 hover:bg-muted/50 cursor-pointer transition-colors"
-                        onClick={() => handleOpenTransaction(t.tipo_evento === 'ABONO_CLIENTE' ? 'ABONO' : 'GASTO', t)}
-                      >
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${t.tipo_evento === 'ABONO_CLIENTE' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                              {t.tipo_evento === 'ABONO_CLIENTE' ? 'ABONO' : 'GASTO'}
-                            </span>
-                            <span className="font-medium text-sm text-foreground">{t.servicio}</span>
+                    {transactions.map((t, idx) => {
+                      const isAbono = t.tipo_evento === 'ABONO_CLIENTE';
+                      const isFactura = !isAbono && t.tipo_doc_costo === 'factura';
+                      const isHonorarios =
+                        !isAbono &&
+                        !isFactura &&
+                        (t.servicio?.toLowerCase().includes('honorarios') ||
+                          t.detalle?.toLowerCase().includes('honorarios'));
+                      const ivaCreditoItem = isFactura
+                        ? t.iva && t.iva > 0
+                          ? t.iva
+                          : Math.round(t.valor_total - t.valor_total / 1.19)
+                        : 0;
+                      const ivaDebitoItem =
+                        isAbono && t.iva_incluido !== false
+                          ? t.iva && t.iva > 0
+                            ? t.iva
+                            : Math.round(t.valor_total - t.valor_total / 1.19)
+                          : 0;
+
+                      return (
+                        <div
+                          key={t.id || idx}
+                          className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 p-3 border border-border/50 rounded-lg bg-card/50 hover:bg-muted/50 cursor-pointer transition-colors"
+                          onClick={() => handleOpenTransaction(isAbono ? 'ABONO' : 'GASTO', t)}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                  isAbono ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                                }`}
+                              >
+                                {isAbono ? 'ABONO' : 'GASTO'}
+                              </span>
+                              <span className="font-medium text-sm text-foreground">{t.servicio}</span>
+                              {isFactura && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                                  Factura · IVA Créd. +${ivaCreditoItem.toLocaleString('es-CL')}
+                                </span>
+                              )}
+                              {isHonorarios && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                  Honorarios · $0 IVA Créd.
+                                </span>
+                              )}
+                              {!isAbono && !isFactura && !isHonorarios && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                  Boleta · $0 IVA Créd.
+                                </span>
+                              )}
+                              {isAbono && ivaDebitoItem > 0 && (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                  IVA Débito ${ivaDebitoItem.toLocaleString('es-CL')}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">{t.detalle || '-'}</p>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">{t.detalle || '-'}</p>
+                          <div className="text-left sm:text-right shrink-0">
+                            <p className={`font-semibold ${isAbono ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {isAbono ? '+' : '-'}${t.valor_total.toLocaleString('es-CL')}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground uppercase">
+                              {t.tipo_doc_costo || 'N/A'}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className={`font-semibold ${t.tipo_evento === 'ABONO_CLIENTE' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {t.tipo_evento === 'ABONO_CLIENTE' ? '+' : '-'}${t.valor_total.toLocaleString('es-CL')}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground uppercase">{t.tipo_doc_costo || 'N/A'}</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            <Card className="shadow-xs glass-card border-border/70">
-              <CardHeader className="pb-4 border-b border-border/40 bg-muted/10">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-emerald-600" />
-                  Resumen de Flujo de Caja (Cash)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-6 space-y-4">
-                {(() => {
-                  const totalPresupuestado = items.reduce((acc, item) => acc + (item.valor_total || 0), 0);
-                  const costoTotalItems = items.reduce((acc, item) => acc + ((item.costo || 0) * (item.cantidad || 1)), 0);
-                  const cashProyectado = totalPresupuestado - costoTotalItems;
-                  const abonosRecibidos = transactions.filter(t => t.tipo_evento === 'ABONO_CLIENTE').reduce((acc, t) => acc + (t.valor_total || 0), 0);
-                  const gastosReales = transactions.filter(t => t.tipo_evento === 'GASTO_REAL').reduce((acc, t) => acc + (t.valor_total || 0), 0);
-                  const cashActualMano = abonosRecibidos - gastosReales;
-                  const saldoPorCobrar = totalPresupuestado - abonosRecibidos;
+            <div className="space-y-4">
+              <Card className="shadow-xs glass-card border-border/70">
+                <CardHeader className="pb-4 border-b border-border/40 bg-muted/10">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-emerald-600" />
+                    Resumen de Flujo de Caja (Cash)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6 space-y-4">
+                  {(() => {
+                    const topLevelApproved = items.filter((item) => !item.parent_id);
+                    const totalPresupuestado = topLevelApproved
+                      .filter((item) => !(item.es_insumo ?? false))
+                      .reduce((acc, item) => acc + ((item.valor_total || 0) * (item.cantidad || 1)), 0);
+                    const costoTotalItems = topLevelApproved.reduce(
+                      (acc, item) => acc + ((item.costo || 0) * (item.cantidad || 1)),
+                      0
+                    );
+                    const cashProyectado = totalPresupuestado - costoTotalItems;
+                    const abonosRecibidos = transactions.filter(t => t.tipo_evento === 'ABONO_CLIENTE').reduce((acc, t) => acc + (t.valor_total || 0), 0);
+                    const gastosReales = transactions.filter(t => t.tipo_evento === 'GASTO_REAL').reduce((acc, t) => acc + (t.valor_total || 0), 0);
+                    const cashActualMano = abonosRecibidos - gastosReales;
+                    const saldoPorCobrar = totalPresupuestado - abonosRecibidos;
 
-                  return (
-                    <>
-                      <div className="flex justify-between items-end border-b border-border/40 pb-3">
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Presupuestado</p>
-                          <p className="text-sm font-semibold text-foreground mt-1">
-                            ${totalPresupuestado.toLocaleString('es-CL')}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Costo Insumos/Servicios</p>
-                          <p className="text-sm font-semibold text-red-600 mt-1">
-                            -${costoTotalItems.toLocaleString('es-CL')}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-900/40">
-                        <div className="flex justify-between items-center">
+                    return (
+                      <>
+                        <div className="flex justify-between items-end border-b border-border/40 pb-3">
                           <div>
-                            <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">
-                              💵 Cash en Mano Proyectado
-                            </p>
-                            <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300">
-                              Ganancia inmediata al terminar evento
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Presupuestado</p>
+                            <p className="text-sm font-semibold text-foreground mt-1">
+                              ${totalPresupuestado.toLocaleString('es-CL')}
                             </p>
                           </div>
-                          <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">
-                            ${cashProyectado.toLocaleString('es-CL')}
-                          </p>
+                          <div className="text-right">
+                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Costo Insumos/Servicios</p>
+                            <p className="text-sm font-semibold text-red-600 mt-1">
+                              -${costoTotalItems.toLocaleString('es-CL')}
+                            </p>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="flex justify-between items-end border-b border-border/40 pb-3">
-                        <div>
-                          <p className="text-xs font-medium text-emerald-600/80 uppercase tracking-wider">Abonos Recibidos</p>
-                          <p className="text-sm font-semibold text-emerald-600 mt-1">
-                            +${abonosRecibidos.toLocaleString('es-CL')}
-                          </p>
+                        <div className="p-3 rounded-lg bg-emerald-50/70 border border-emerald-200/60 dark:bg-emerald-950/30 dark:border-emerald-900/40">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200 uppercase tracking-wider">
+                                💵 Cash en Mano Proyectado
+                              </p>
+                              <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300">
+                                Ganancia inmediata al terminar evento
+                              </p>
+                            </div>
+                            <p className="text-lg font-black text-emerald-700 dark:text-emerald-300">
+                              ${cashProyectado.toLocaleString('es-CL')}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs font-medium text-rose-600/80 uppercase tracking-wider">Gastos Reales Pagados</p>
-                          <p className="text-sm font-semibold text-rose-600 mt-1">
-                            -${gastosReales.toLocaleString('es-CL')}
-                          </p>
-                        </div>
-                      </div>
 
-                      <div className="flex justify-between items-center border-b border-border/40 pb-3">
-                        <div>
-                          <p className="text-xs font-bold text-foreground uppercase tracking-wider">Cash Actual en Cuenta/Caja</p>
-                          <p className="text-[11px] text-muted-foreground">Abonos recaudados menos gastos pagados</p>
+                        <div className="flex justify-between items-end border-b border-border/40 pb-3">
+                          <div>
+                            <p className="text-xs font-medium text-emerald-600/80 uppercase tracking-wider">Abonos Recibidos</p>
+                            <p className="text-sm font-semibold text-emerald-600 mt-1">
+                              +${abonosRecibidos.toLocaleString('es-CL')}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-medium text-rose-600/80 uppercase tracking-wider">Gastos Reales Pagados</p>
+                            <p className="text-sm font-semibold text-rose-600 mt-1">
+                              -${gastosReales.toLocaleString('es-CL')}
+                            </p>
+                          </div>
                         </div>
-                        <p className={`text-base font-bold ${cashActualMano >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          ${cashActualMano.toLocaleString('es-CL')}
-                        </p>
-                      </div>
 
-                      <div className="flex justify-between items-end pt-1">
-                        <div>
-                          <p className="text-xs font-bold text-foreground uppercase tracking-wider">Saldo por Cobrar</p>
-                          <p className="text-xl font-bold text-foreground mt-1">
-                            ${saldoPorCobrar.toLocaleString('es-CL')}
+                        <div className="flex justify-between items-center border-b border-border/40 pb-3">
+                          <div>
+                            <p className="text-xs font-bold text-foreground uppercase tracking-wider">Cash Actual en Cuenta/Caja</p>
+                            <p className="text-[11px] text-muted-foreground">Abonos recaudados menos gastos pagados</p>
+                          </div>
+                          <p className={`text-base font-bold ${cashActualMano >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            ${cashActualMano.toLocaleString('es-CL')}
                           </p>
                         </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </CardContent>
-            </Card>
+
+                        <div className="flex justify-between items-end pt-1">
+                          <div>
+                            <p className="text-xs font-bold text-foreground uppercase tracking-wider">Saldo por Cobrar</p>
+                            <p className="text-xl font-bold text-foreground mt-1">
+                              ${saldoPorCobrar.toLocaleString('es-CL')}
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-xs glass-card border-amber-200/70 bg-amber-50/15">
+                <CardHeader className="pb-3 border-b border-border/40">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Receipt className="h-4 w-4 text-amber-600" />
+                    Balance IVA del Evento (Débito vs Crédito — F29)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-3 text-xs">
+                  {(() => {
+                    const ivaDebitoPresupuestado = items
+                      .filter((i) => !i.parent_id && !(i.es_insumo ?? false) && (i.iva_incluido ?? true))
+                      .reduce((acc, i) => acc + ((i.iva || 0) * (i.cantidad || 1)), 0);
+                    const ivaDebitoAbonos = transactions
+                      .filter((t) => t.tipo_evento === 'ABONO_CLIENTE' && t.iva_incluido !== false)
+                      .reduce(
+                        (acc, t) =>
+                          acc + (t.iva && t.iva > 0 ? t.iva : Math.round(t.valor_total - t.valor_total / 1.19)),
+                        0
+                      );
+                    const gastosFactura = transactions.filter(
+                      (t) => t.tipo_evento === 'GASTO_REAL' && t.tipo_doc_costo === 'factura'
+                    );
+                    const gastosBoleta = transactions.filter(
+                      (t) => t.tipo_evento === 'GASTO_REAL' && t.tipo_doc_costo !== 'factura'
+                    );
+                    const ivaCreditoReales = gastosFactura.reduce(
+                      (acc, t) =>
+                        acc + (t.iva && t.iva > 0 ? t.iva : Math.round(t.valor_total - t.valor_total / 1.19)),
+                      0
+                    );
+                    const totalGastosFactura = gastosFactura.reduce((acc, t) => acc + (t.valor_total || 0), 0);
+                    const totalGastosBoleta = gastosBoleta.reduce((acc, t) => acc + (t.valor_total || 0), 0);
+                    const balanceF29Real = ivaDebitoAbonos - ivaCreditoReales;
+
+                    return (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">IVA Débito Presupuestado (19%):</span>
+                          <span className="font-semibold text-foreground">
+                            ${ivaDebitoPresupuestado.toLocaleString('es-CL')}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">IVA Débito en Abonos Recibidos:</span>
+                          <span className="font-semibold text-amber-700">
+                            ${ivaDebitoAbonos.toLocaleString('es-CL')}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">
+                            IVA Crédito Facturas ({gastosFactura.length}):
+                          </span>
+                          <span className="font-semibold text-blue-700">
+                            -${ivaCreditoReales.toLocaleString('es-CL')}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] text-muted-foreground border-t border-border/40 pt-2">
+                          <span>Pagado con Factura vs Boleta/Honorarios:</span>
+                          <span>
+                            ${totalGastosFactura.toLocaleString('es-CL')} / ${totalGastosBoleta.toLocaleString('es-CL')}
+                          </span>
+                        </div>
+                        <div
+                          className={`p-2.5 rounded-lg border flex justify-between items-center font-bold ${
+                            balanceF29Real > 0
+                              ? 'bg-amber-50 border-amber-200 text-amber-900'
+                              : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          }`}
+                        >
+                          <span>
+                            {balanceF29Real > 0 ? 'IVA Neto a Reservar F29:' : 'Remanente IVA a Favor:'}
+                          </span>
+                          <span>${Math.abs(balanceF29Real).toLocaleString('es-CL')}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

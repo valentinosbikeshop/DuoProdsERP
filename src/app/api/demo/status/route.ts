@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient, getAuthenticatedContext } from '@/lib/supabase/admin';
-import { getDemoQuotaStats } from '@/lib/demo-seed';
+import { ensureDemoEnvironment, getDemoQuotaStats } from '@/lib/demo-seed';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
     }
 
     const admin = createAdminClient();
+    await ensureDemoEnvironment(admin);
     const stats = await getDemoQuotaStats(admin, ctx.organization.id);
 
     return NextResponse.json({ stats });

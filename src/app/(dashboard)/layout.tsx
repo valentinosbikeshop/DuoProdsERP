@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 import { DemoBanner } from '@/components/layout/demo-banner';
+import { InteractiveGuideBot } from '@/components/guide/interactive-guide-bot';
 import { Sheet, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useUser } from '@/hooks/use-user';
+import { createClient } from '@/lib/supabase/client';
 import { DUO_ORG_SLUG } from '@/lib/constants';
 import { Loader2, Eye, ArrowLeft, Shield } from 'lucide-react';
 
@@ -19,7 +21,23 @@ export default function DashboardLayout({
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [returningHome, setReturningHome] = useState(false);
-  const { organization, loading, isAdmin, isSuperAdmin, isDemo } = useUser();
+  const { organization, profile, authUser, loading, isAdmin, isSuperAdmin, isDemo } = useUser();
+
+  const handleSignOut = async () => {
+    try {
+      if (isSuperAdmin && organization && organization.slug !== DUO_ORG_SLUG) {
+        await fetch('/api/admin/switch-company', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ returnHome: true }),
+        }).catch(() => {});
+      }
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    } finally {
+      window.location.href = '/login';
+    }
+  };
 
   const handleReturnHome = async () => {
     setReturningHome(true);
@@ -48,6 +66,7 @@ export default function DashboardLayout({
   }
 
   const orgName = organization?.name || 'DUO Producciones';
+  const activeEmail = profile?.email || authUser?.email || null;
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -59,6 +78,8 @@ export default function DashboardLayout({
           isDemo={isDemo}
           organizationName={orgName}
           organizationLogoUrl={organization?.logo_url}
+          userEmail={activeEmail}
+          onSignOut={handleSignOut}
         />
       </div>
 
@@ -73,13 +94,15 @@ export default function DashboardLayout({
             isDemo={isDemo}
             organizationName={orgName}
             organizationLogoUrl={organization?.logo_url}
+            userEmail={activeEmail}
+            onSignOut={handleSignOut}
           />
         </div>
       </Sheet>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
-        {isDemo && <DemoBanner isSuperAdmin={isSuperAdmin} />}
+        {isDemo && <DemoBanner isSuperAdmin={isSuperAdmin} onSignOut={handleSignOut} />}
         {isSuperAdmin && organization && !isDemo && organization.slug !== DUO_ORG_SLUG && (
           <div className="bg-slate-900 text-slate-100 border-b border-indigo-500/30 px-4 sm:px-6 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-2">
@@ -111,11 +134,12 @@ export default function DashboardLayout({
             </div>
           </div>
         )}
-        <Header onToggleSidebar={() => setSidebarOpen(true)} />
-        <main className="p-6 flex-1 overflow-auto">
+        <Header onToggleSidebar={() => setSidebarOpen(true)} onSignOut={handleSignOut} />
+        <main className="p-6 flex-1 overflow-auto pb-20">
           {children}
         </main>
       </div>
+      <InteractiveGuideBot isDemo={isDemo} />
     </div>
   );
 }

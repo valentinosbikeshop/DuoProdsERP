@@ -4,7 +4,7 @@
   "2": "createClient",
   "3": "@google/genai",
   "4": "createAdminClient",
-  "5": "Button",
+  "5": "costs/page.tsx",
   "6": "demo-seed.ts",
   "7": "compilerOptions",
   "8": "dependencies",
@@ -20,11 +20,10 @@
   "18": "companies/route.ts",
   "19": "client.ts",
   "20": "devDependencies",
-  "21": "next",
   "22": "parse-file/route.ts",
   "23": "allowScripts",
   "24": "scripts",
   "25": "tailwind.config.ts",
-  "26": "cn",
+  "26": "Button",
   "27": "status/route.ts"
 }

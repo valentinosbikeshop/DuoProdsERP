@@ -4,6 +4,8 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { KairosLogo, CompanyLogoMark } from '@/components/ui/kairos-logo';
+import { Button } from '@/components/ui/button';
+import { LogOut } from 'lucide-react';
 import { navLinks, adminLinks } from './nav-links';
 
 interface SidebarProps {
@@ -12,6 +14,8 @@ interface SidebarProps {
   isDemo?: boolean;
   organizationName?: string;
   organizationLogoUrl?: string | null;
+  userEmail?: string | null;
+  onSignOut?: () => void;
 }
 
 export function Sidebar({
@@ -20,6 +24,8 @@ export function Sidebar({
   isDemo = false,
   organizationName = 'DUO Producciones',
   organizationLogoUrl,
+  userEmail,
+  onSignOut,
 }: SidebarProps) {
   const pathname = usePathname();
 
@@ -118,8 +124,27 @@ export function Sidebar({
           </div>
         )}
       </div>
-      <div className="px-4 py-3 border-t shrink-0 flex items-center justify-center">
-        <KairosLogo size="sm" subtitle="Multi-Tenant Cloud" />
+      <div className="px-4 py-3 border-t shrink-0 space-y-2.5 bg-muted/15">
+        {userEmail && (
+          <p className="text-[11px] text-muted-foreground truncate px-1" title={userEmail}>
+            {userEmail}
+          </p>
+        )}
+        {onSignOut && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onSignOut}
+            className="w-full justify-start gap-2 h-8 text-xs font-medium text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            Cerrar Sesión
+          </Button>
+        )}
+        <div className="flex items-center justify-center pt-1">
+          <KairosLogo size="sm" subtitle="Multi-Tenant Cloud" />
+        </div>
       </div>
     </aside>
   );

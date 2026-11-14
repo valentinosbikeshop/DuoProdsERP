@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createAdminClient, getAuthenticatedContext } from '@/lib/supabase/admin';
 import { SUPER_ADMIN_EMAIL, DUO_ORG_SLUG } from '@/lib/constants';
 import { calculateFinancials } from '@/lib/utils';
+import { COMPANY_COST_TEMPLATES, formatCostMetadata } from '@/lib/cost-metadata';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -73,12 +74,59 @@ function generateInviteCode(name: string) {
   return `${prefix}-${suffix}`;
 }
 
+const EXTRA_STARTER_COSTS = [
+  {
+    servicio: 'Banda Live / Música en Vivo (Formato Evento)',
+    tiempo_detalle: formatCostMetadata({
+      resourceType: 'personal',
+      staffCount: 5,
+      staffHours: '2 bloques 45 min',
+      staffModality: 'honorarios',
+      aplicaIvaVenta: true,
+      cleanDetail: 'Músicos en vivo + backline básico',
+    }),
+    tipo_evento: 'Empresa',
+    costo: 550000,
+    ganancia: 260000,
+    tipo_doc_costo: 'boleta' as const,
+    aplicaIvaVenta: true,
+  },
+  {
+    servicio: 'Cobertura Fotográfica + Reel Audiovisual',
+    tiempo_detalle: formatCostMetadata({
+      resourceType: 'personal',
+      staffCount: 2,
+      staffHours: '6 hrs',
+      staffModality: 'honorarios',
+      aplicaIvaVenta: true,
+      cleanDetail: 'Fotógrafo + realizador con entrega digital 72h',
+    }),
+    tipo_evento: 'Privado',
+    costo: 240000,
+    ganancia: 120000,
+    tipo_doc_costo: 'boleta' as const,
+    aplicaIvaVenta: true,
+  },
+];
+
 const STARTER_COSTS = [
-  { servicio: 'Producción General Evento', tiempo_detalle: 'Jornada base', tipo_evento: 'Empresa', costo: 150000, ganancia: 65000, tipo_doc_costo: 'factura' as const },
-  { servicio: 'Amplificación e Iluminación Base', tiempo_detalle: 'Hasta 150 personas', tipo_evento: 'Privado', costo: 120000, ganancia: 55000, tipo_doc_costo: 'factura' as const },
-  { servicio: 'Servicio Gastronómico / Banquete', tiempo_detalle: 'Por persona (base)', tipo_evento: 'Empresa', costo: 28000, ganancia: 12000, tipo_doc_costo: 'factura' as const },
-  { servicio: 'Staff Operativo / Anfitriones', tiempo_detalle: 'Por turno 6 hrs', tipo_evento: 'Empresa', costo: 60000, ganancia: 25000, tipo_doc_costo: 'boleta' as const },
-  { servicio: 'Fotografía & Registro Audiovisual', tiempo_detalle: 'Cobertura evento', tipo_evento: 'Privado', costo: 180000, ganancia: 80000, tipo_doc_costo: 'boleta' as const },
+  ...COMPANY_COST_TEMPLATES.map((tpl) => ({
+    servicio: tpl.servicio,
+    tiempo_detalle: formatCostMetadata({
+      resourceType: tpl.resourceType,
+      staffCount: tpl.staffCount,
+      staffHours: tpl.staffHours,
+      staffModality: tpl.staffModality,
+      aplicaIvaVenta: tpl.aplicaIvaVenta,
+      cleanDetail: tpl.detail,
+    }),
+    tipo_evento: tpl.tipo_evento,
+    costo: tpl.costo,
+    ganancia: tpl.ganancia,
+    tipo_doc_costo: tpl.tipo_doc_costo,
+    aplicaIvaVenta: tpl.aplicaIvaVenta,
+  })),
+  ...EXTRA_STARTER_COSTS,
 ];
 
 export async function GET(req: NextRequest) {
@@ -173,7 +221,13 @@ export async function POST(req: NextRequest) {
 
     if (data.seedStarterCatalog) {
       const starterRows = STARTER_COSTS.map((c) => {
-        const fin = calculateFinancials(c.costo, c.ganancia, c.tipo_doc_costo, true, false);
+        const fin = calculateFinancials(
+          c.costo,
+          c.ganancia,
+          c.tipo_doc_costo,
+          c.aplicaIvaVenta,
+          false
+        );
         return {
           organization_id: newOrg.id,
           servicio: c.servicio,

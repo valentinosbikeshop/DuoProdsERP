@@ -1,5 +1,7 @@
-import Link from 'next/link';
-import { Clock } from 'lucide-react';
+'use client';
+
+import { useState } from 'react';
+import { Clock, LogOut, Loader2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -10,8 +12,22 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { KairosLogo } from '@/components/ui/kairos-logo';
+import { createClient } from '@/lib/supabase/client';
 
 export default function PendingPage() {
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      window.location.href = '/login';
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
   return (
     <Card className="w-full shadow-lg border-slate-200 animate-in fade-in zoom-in duration-500">
       <CardHeader className="space-y-4 text-center pb-6">
@@ -36,11 +52,16 @@ export default function PendingPage() {
         </p>
       </CardContent>
       <CardFooter className="flex justify-center pt-2">
-        <Link href="/login" className="w-full">
-          <Button variant="outline" className="w-full font-medium hover:bg-slate-50">
-            Volver al inicio de sesión
-          </Button>
-        </Link>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={signingOut}
+          onClick={handleSignOut}
+          className="w-full font-medium hover:bg-slate-50 gap-2"
+        >
+          {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+          {signingOut ? 'Cerrando sesión...' : 'Cerrar sesión y volver al login'}
+        </Button>
       </CardFooter>
     </Card>
   );
